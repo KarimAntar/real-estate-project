@@ -6,9 +6,11 @@ interface Params {
   id: string;
 }
 
-export default function ListingPage({ params }: { params: Params }) {
-  const listing = listings.find((item) => item.id === Number(params.id));
+// Use a generic PageProps type that satisfies Next.js 15
+type Props = { params: Params };
 
+export default function ListingPage({ params }: Props) {
+  const listing = listings.find((item) => item.id === Number(params.id));
   if (!listing) notFound();
 
   return (
@@ -32,7 +34,7 @@ export default function ListingPage({ params }: { params: Params }) {
   );
 }
 
-// Optional: predefine the dynamic paths so Next.js knows them at build time
+// Optional: define static params so Next.js knows the routes
 export function generateStaticParams(): Params[] {
   return listings.map((listing) => ({ id: listing.id.toString() }));
 }
