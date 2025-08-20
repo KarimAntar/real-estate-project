@@ -2,12 +2,7 @@
 import { notFound } from "next/navigation";
 import { listings } from "@/data/listings";
 
-interface Params {
-  id: string;
-}
-
-export default async function ListingPage({ params }: { params: Params }) {
-  // Convert params.id to number
+export default function ListingPage({ params }: { params: { id: string } }) {
   const listing = listings.find((item) => item.id === Number(params.id));
 
   if (!listing) {
