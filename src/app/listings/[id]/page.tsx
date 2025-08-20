@@ -3,13 +3,29 @@ import { notFound } from "next/navigation";
 import { listings } from "@/data/listings";
 import Image from "next/image";
 
-interface Params {
-  id: string;
+interface Listing {
+  id: number;
+  title: string;
+  price: string;
+  location: string;
+  description?: string;
+  image: string;
 }
 
-// Async function ensures Next.js sees the return as Promise<JSX.Element>
-export default async function ListingPage({ params }: { params: Params }) {
+// Optional: Generate static params for SSG
+export async function generateStaticParams() {
+  return listings.map((listing) => ({
+    id: listing.id.toString(),
+  }));
+}
+
+interface PageProps {
+  params: { id: string };
+}
+
+export default async function ListingPage({ params }: PageProps) {
   const listing = listings.find((item) => item.id === Number(params.id));
+
   if (!listing) notFound();
 
   return (
@@ -33,9 +49,4 @@ export default async function ListingPage({ params }: { params: Params }) {
       </div>
     </div>
   );
-}
-
-// Optional: generate static paths for all listings
-export function generateStaticParams(): Params[] {
-  return listings.map((listing) => ({ id: listing.id.toString() }));
 }
