@@ -2,18 +2,14 @@
 import { notFound } from "next/navigation";
 import { listings } from "@/data/listings";
 
-// Generate static paths for each listing
-export function generateStaticParams() {
-  return listings.map(listing => ({ id: listing.id.toString() }));
+interface Params {
+  id: string;
 }
 
-// Page component — no custom props type needed
-export default function ListingPage({ params }: { params: { id: string } }) {
-  const listing = listings.find(item => item.id === Number(params.id));
+export default function ListingPage({ params }: { params: Params }) {
+  const listing = listings.find((item) => item.id === Number(params.id));
 
-  if (!listing) {
-    notFound();
-  }
+  if (!listing) notFound();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
@@ -34,4 +30,9 @@ export default function ListingPage({ params }: { params: { id: string } }) {
       </div>
     </div>
   );
+}
+
+// Optional: predefine the dynamic paths so Next.js knows them at build time
+export function generateStaticParams(): Params[] {
+  return listings.map((listing) => ({ id: listing.id.toString() }));
 }
