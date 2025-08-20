@@ -1,24 +1,25 @@
 // src/app/listings/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { listings } from "@/data/listings";
+import Image from "next/image";
 
 interface Params {
   id: string;
 }
 
-// Use a generic PageProps type that satisfies Next.js 15
-type Props = { params: Params };
-
-export default function ListingPage({ params }: Props) {
+// Async function ensures Next.js sees the return as Promise<JSX.Element>
+export default async function ListingPage({ params }: { params: Params }) {
   const listing = listings.find((item) => item.id === Number(params.id));
   if (!listing) notFound();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-        <img
+        <Image
           src={listing.image}
           alt={listing.title}
+          width={1200}
+          height={480}
           className="w-full h-96 object-cover"
         />
         <div className="p-6">
@@ -34,7 +35,7 @@ export default function ListingPage({ params }: Props) {
   );
 }
 
-// Optional: define static params so Next.js knows the routes
+// Optional: generate static paths for all listings
 export function generateStaticParams(): Params[] {
   return listings.map((listing) => ({ id: listing.id.toString() }));
 }
