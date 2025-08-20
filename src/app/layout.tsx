@@ -1,6 +1,7 @@
 // app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
+import Image from "next/image";
 import { Poppins } from "next/font/google";
 import { Facebook, Twitter, Instagram } from "lucide-react";
 
@@ -23,11 +24,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             {/* Logo + Title */}
             <Link href="/" className="flex items-center space-x-2">
-              <img
-                src="https://cdn-icons-png.flaticon.com/512/10365/10365152.png"
-                alt="Real Estate Logo"
-                className="h-10 w-auto"
-              />
+              <div className="relative w-10 h-10">
+                <Image
+                  src="https://cdn-icons-png.flaticon.com/512/10365/10365152.png"
+                  alt="Real Estate Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
               <h1 className="text-xl font-bold">Real Estate</h1>
             </Link>
 
