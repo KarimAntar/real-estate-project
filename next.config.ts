@@ -4,7 +4,8 @@ const nextConfig = {
   images: {
     domains: [
       'images.unsplash.com',
-      'plus.unsplash.com', // add this to allow premium images
+      'plus.unsplash.com',
+      'cdn-icons-png.flaticon.com', // add this to allow premium images
     ],
   },
 };
