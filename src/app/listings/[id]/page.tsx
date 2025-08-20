@@ -2,8 +2,14 @@
 import { notFound } from "next/navigation";
 import { listings } from "@/data/listings";
 
+// Generate static paths for each listing
+export function generateStaticParams() {
+  return listings.map(listing => ({ id: listing.id.toString() }));
+}
+
+// Page component — no custom props type needed
 export default function ListingPage({ params }: { params: { id: string } }) {
-  const listing = listings.find((item) => item.id === Number(params.id));
+  const listing = listings.find(item => item.id === Number(params.id));
 
   if (!listing) {
     notFound();
