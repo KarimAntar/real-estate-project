@@ -6,8 +6,8 @@ interface Params {
   id: string;
 }
 
-// Make the page function async (Next.js 15 expects async pages for some types)
 export default async function ListingPage({ params }: { params: Params }) {
+  // Convert params.id to number
   const listing = listings.find((item) => item.id === Number(params.id));
 
   if (!listing) {
