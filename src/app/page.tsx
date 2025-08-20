@@ -184,7 +184,7 @@ export default function HomePage() {
             { name: "Priya K.", text: "Professional, reliable, and lots of great listings. Highly recommended." },
           ].map((t, i) => (
             <div key={i} className="bg-gray-700 rounded-2xl p-6 shadow-md text-center">
-              <p className="text-gray-300 italic mb-4">"{t.text}"</p>
+              <p className="text-gray-300 italic mb-4">{"\"" + t.text + "\""}</p>
               <h4 className="font-semibold text-white">- {t.name}</h4>
             </div>
           ))}
