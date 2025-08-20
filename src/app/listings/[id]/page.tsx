@@ -1,14 +1,18 @@
+// src/app/listings/[id]/page.tsx
 import { listings } from "@/data/listings";
 import Image from "next/image";
 
-type PageProps = {
-  params: {
-    id: string;
-  };
-};
+interface Params {
+  id: string;
+}
 
-export default function ListingPage({ params }: PageProps) {
-  // Convert params.id to number if your listings.id is a number
+// The correct type signature for App Router pages
+interface Props {
+  params: Params;
+}
+
+export default function ListingPage({ params }: Props) {
+  // If your listing IDs are numbers, convert params.id
   const listing = listings.find((l) => l.id === Number(params.id));
 
   if (!listing) {
