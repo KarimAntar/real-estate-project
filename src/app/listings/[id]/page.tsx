@@ -1,43 +1,35 @@
 // src/app/listings/[id]/page.tsx
 import { notFound } from "next/navigation";
-import { listings } from "@/data/listings";
 import Image from "next/image";
+import { listings } from "@/data/listings";
 
-interface Listing {
-  id: number;
-  title: string;
-  price: string;
-  location: string;
-  description?: string;
-  image: string;
+interface Params {
+  id: string;
 }
 
-// Optional: Generate static params for SSG
-export async function generateStaticParams() {
-  return listings.map((listing) => ({
-    id: listing.id.toString(),
-  }));
+interface Props {
+  params: Params;
 }
 
-interface PageProps {
-  params: { id: string };
-}
-
-export default async function ListingPage({ params }: PageProps) {
+export default function ListingPage({ params }: Props) {
   const listing = listings.find((item) => item.id === Number(params.id));
 
-  if (!listing) notFound();
+  if (!listing) {
+    notFound();
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-        <Image
-          src={listing.image}
-          alt={listing.title}
-          width={1200}
-          height={480}
-          className="w-full h-96 object-cover"
-        />
+        <div className="relative w-full h-96">
+          <Image
+            src={listing.image}
+            alt={listing.title}
+            fill
+            className="object-cover"
+            priority
+          />
+        </div>
         <div className="p-6">
           <h1 className="text-3xl font-bold mb-2">{listing.title}</h1>
           <p className="text-blue-400 text-xl mb-2">{listing.price}</p>
