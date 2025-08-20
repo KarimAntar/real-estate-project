@@ -1,32 +1,33 @@
-// src/app/listings/[id]/page.tsx
-import Image from "next/image";
 import { listings } from "@/data/listings";
+import Image from "next/image";
 
-interface PageParams {
-  id: string;
-}
+type PageProps = {
+  params: {
+    id: string;
+  };
+};
 
-export default function ListingPage({ params }: { params: PageParams }) {
-const listing = listings.find((l) => l.id === Number(params.id));
+export default function ListingPage({ params }: PageProps) {
+  // Convert params.id to number if your listings.id is a number
+  const listing = listings.find((l) => l.id === Number(params.id));
 
-  if (!listing) return <p className="text-white p-8">Listing not found</p>;
+  if (!listing) {
+    return <p className="p-8 text-white">Listing not found</p>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-6">{listing.title}</h1>
-
-      <div className="relative w-full h-96 mb-6 rounded-xl overflow-hidden">
-        <Image
-          src={listing.image}
-          alt={listing.title}
-          fill
-          className="object-cover"
-        />
-      </div>
-
+      <h1 className="text-4xl font-bold mb-4">{listing.title}</h1>
+      <Image
+        src={listing.image}
+        alt={listing.title}
+        width={800}
+        height={500}
+        className="rounded-lg object-cover mb-4"
+      />
       <p className="text-blue-400 text-xl mb-2">{listing.price}</p>
-      <p className="text-gray-400 mb-4">{listing.location}</p>
-      <p className="text-gray-300">{listing.description}</p>
+      <p className="text-gray-400 mb-2">{listing.location}</p>
+      <p className="text-gray-200">{listing.description}</p>
     </div>
   );
 }
