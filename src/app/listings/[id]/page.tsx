@@ -2,17 +2,16 @@
 import { listings } from "@/data/listings";
 import Image from "next/image";
 
-interface Params {
-  id: string;
-}
-
-// The correct type signature for App Router pages
+// Only define the params shape
 interface Props {
-  params: Params;
+  params: {
+    id: string;
+  };
 }
 
+// Default export for the page
 export default function ListingPage({ params }: Props) {
-  // If your listing IDs are numbers, convert params.id
+  // Convert id to number if your listings use number IDs
   const listing = listings.find((l) => l.id === Number(params.id));
 
   if (!listing) {
