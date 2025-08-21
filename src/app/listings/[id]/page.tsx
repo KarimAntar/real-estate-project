@@ -9,12 +9,9 @@ interface Props {
   };
 }
 
-// Make the component an async function and await the params
 export default async function ListingPage({ params }: Props) {
-  // Await the params to get the actual object
-  const { id } = await params;
 
-  // Convert id to number if your listings use number IDs
+  const { id } = await params;
   const listing = listings.find((l) => l.id === Number(id));
 
   if (!listing) {
