@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Poppins } from "next/font/google";
 import { Facebook, Twitter, Instagram } from "lucide-react";
+import { Analytics } from '@vercel/analytics/next';
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -97,6 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             © {new Date().getFullYear()} Real Estate Listings. All rights reserved.
           </p>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
