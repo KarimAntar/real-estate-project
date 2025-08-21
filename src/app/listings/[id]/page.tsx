@@ -18,7 +18,11 @@ export default async function ListingPage({ params }: Props) {
   const listing = listings.find((l) => l.id === Number(id));
 
   if (!listing) {
-    return <p className="p-8 text-white">Listing not found</p>;
+    return (
+      <p className="min-h-screen bg-gray-900 p-8 text-white">
+        Listing not found
+      </p>
+    );
   }
 
   return (
