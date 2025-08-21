@@ -2,35 +2,41 @@
 import { listings } from "@/data/listings";
 import Image from "next/image";
 
-// Only define the params shape
-interface Props {
-  params: {
-    id: string;
-  };
-}
-
-// Default export for the page
-export default function ListingPage({ params }: Props) {
-  // Convert id to number if your listings use number IDs
+// No need to define the Props interface explicitly
+export default function ListingPage({ params }: { params: { id: string } }) {
+  // Convert id to number for finding the listing
   const listing = listings.find((l) => l.id === Number(params.id));
 
+  // Handle case where listing is not found
   if (!listing) {
-    return <p className="p-8 text-white">Listing not found</p>;
+    return (
+      <p className="min-h-screen bg-gray-900 p-8 text-white">
+        Listing not found
+      </p>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-4xl font-bold mb-4">{listing.title}</h1>
-      <Image
-        src={listing.image}
-        alt={listing.title}
-        width={800}
-        height={500}
-        className="rounded-lg object-cover mb-4"
-      />
-      <p className="text-blue-400 text-xl mb-2">{listing.price}</p>
-      <p className="text-gray-400 mb-2">{listing.location}</p>
-      <p className="text-gray-200">{listing.description}</p>
+      <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl bg-gray-800 shadow-lg">
+        {/* Use the Next.js Image component with the new styles */}
+        <Image
+          src={listing.image}
+          alt={listing.title}
+          width={1200}
+          height={600}
+          className="h-96 w-full object-cover"
+        />
+        <div className="p-6">
+          <h1 className="mb-2 text-3xl font-bold">{listing.title}</h1>
+          <p className="mb-2 text-xl text-blue-400">{listing.price}</p>
+          <p className="mb-4 text-gray-400">{listing.location}</p>
+          {/* Use the nullish coalescing operator (??) for a clean fallback */}
+          <p className="text-gray-300">
+            {listing.description ?? "No description available for this property."}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
