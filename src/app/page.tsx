@@ -104,7 +104,7 @@ export default function HomePage() {
               <div className="grid sm:grid-cols-1 md:grid-cols-3 gap-6">
                 {filteredListings.map((listing) => (
                   <div key={listing.id} className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden transition transform hover:scale-105 hover:shadow-blue-500/50">
-                    <Image src={listing.image} alt={listing.title} width={400} height={250} className="w-full h-48 object-cover" />
+                    <Image src={listing.images[0]} alt={listing.title} width={400} height={250} className="w-full h-48 object-cover" />
                     <div className="p-4">
                       <h3 className="text-xl font-semibold">{listing.title}</h3>
                       <p className="text-gray-400">{listing.location}</p>
@@ -122,7 +122,7 @@ export default function HomePage() {
             <div className="grid sm:grid-cols-1 md:grid-cols-3 gap-6">
               {featured.map((listing) => (
                 <div key={listing.id} className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden transition transform hover:scale-105 hover:shadow-blue-500/50">
-                  <Image src={listing.image} alt={listing.title} width={400} height={250} className="w-full h-48 object-cover" />
+                  <Image src={listing.images[0]} alt={listing.title} width={400} height={250} className="w-full h-48 object-cover" />
                   <div className="p-4">
                     <h3 className="text-xl font-semibold">{listing.title}</h3>
                     <p className="text-gray-400">{listing.location}</p>

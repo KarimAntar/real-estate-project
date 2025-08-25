@@ -1,4 +1,3 @@
-// src/app/listings/page.tsx
 import Link from "next/link";
 import Image from "next/image";
 import { listings } from "@/data/listings";
@@ -14,19 +13,32 @@ export default function ListingsPage() {
             href={`/listings/${listing.id}`}
             className="bg-gray-800 rounded-2xl shadow-md overflow-hidden hover:scale-105 transition-transform"
           >
+            {/* Thumbnail */}
             <div className="relative w-full h-48">
               <Image
-                src={listing.image}
+                src={
+                  listing.images[0] ||
+                  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c"
+                }
                 alt={listing.title}
                 fill
                 className="object-cover"
-                priority={true} // optional, for above-the-fold images
+                priority
               />
             </div>
+
+            {/* Info */}
             <div className="p-4">
-              <h2 className="text-xl font-semibold">{listing.title}</h2>
-              <p className="text-blue-400">{listing.price}</p>
-              <p className="text-gray-400 text-sm">{listing.location}</p>
+              <h2 className="text-xl font-semibold mb-1">{listing.title}</h2>
+              <p className="text-blue-400 font-medium">{listing.price}</p>
+              <p className="text-gray-400 text-sm mb-3">{listing.location}</p>
+
+              {/* Features */}
+              <div className="flex justify-between text-sm text-gray-300">
+                <span>🛏 {listing.bedrooms} Beds</span>
+                <span>🛁 {listing.bathrooms} Baths</span>
+                <span>📐 {listing.area} sqft</span>
+              </div>
             </div>
           </Link>
         ))}
