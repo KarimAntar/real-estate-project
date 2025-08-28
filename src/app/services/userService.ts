@@ -61,8 +61,10 @@ export const updateUserProfile = async (data: any) => {
 // ----------------------
 export const getUserListings = async (): Promise<Listing[]> => {
   try {
-    const token = localStorage.getItem("jwtToken");
-    if (!token) throw new Error("User not authenticated");
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
+
+    const token = await user.getIdToken(); // use live token instead of localStorage
 
     const res = await api.get("/listings", {
       headers: { Authorization: `Bearer ${token}` },
@@ -74,7 +76,6 @@ export const getUserListings = async (): Promise<Listing[]> => {
     throw new Error(err.response?.data?.error || err.message || "Failed to fetch listings");
   }
 };
-
 // ✅ Add Listing
 export const addListing = async (listing: ListingFormData) => {
   const user = auth.currentUser;

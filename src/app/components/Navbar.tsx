@@ -5,13 +5,13 @@ import Image from "next/image";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
 import { useState } from "react";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, LogIn, UserPlus } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth } from "@/app/firebase/firebaseConfig"; // adjust path if needed
+import { auth } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth(); 
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -29,6 +29,9 @@ export default function Navbar() {
 
   // Toggle notifications dropdown
   const toggleNotifications = () => setShowNotifications(!showNotifications);
+
+  // If auth state is still loading, don't render navbar links yet
+  if (authLoading) return null; 
 
   return (
     <nav className="bg-gray-900 p-4 shadow-lg relative z-10">
@@ -96,7 +99,7 @@ export default function Navbar() {
               {/* Logout */}
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 p-2 rounded-lg bg-red-600 hover:bg-red-700 transition text-sm font-medium"
+                className="flex items-center gap-2 p-2 rounded-lg bg-red-600 hover:bg-red-700 shadow-md hover:scale-105 transition text-sm font-medium"
               >
                 <LogOut className="w-4 h-4 inline" />
                 Logout
@@ -104,16 +107,21 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              {/* Login */}
               <Link
                 href="/auth/login"
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-white transition"
+                className="flex items-center gap-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 shadow-md hover:scale-105 transition text-sm font-medium"
               >
+                <LogIn className="w-4 h-4 inline" />
                 Login
               </Link>
+
+              {/* Register */}
               <Link
                 href="/auth/register"
-                className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white transition"
+                className="flex items-center gap-2 p-2 rounded-lg bg-green-600 hover:bg-green-700 shadow-md hover:scale-105 transition text-sm font-medium"
               >
+                <UserPlus className="w-4 h-4 inline" />
                 Register
               </Link>
             </>

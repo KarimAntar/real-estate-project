@@ -21,7 +21,7 @@ interface AppUser {
 
 interface AuthContextProps {
   user: AppUser | null;
-  initializing: boolean;
+  loading: boolean; // updated from initializing
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [initializing, setInitializing] = useState(true);
+  const [loading, setLoading] = useState(true); // renamed
 
   const fetchToken = async (firebaseUser: User) => {
     const token = await firebaseUser.getIdToken();
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("jwtToken");
         setUser(null);
       }
-      setInitializing(false);
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, initializing, login, register, logout, sendVerificationEmail, getIdToken }}
+      value={{ user, loading, login, register, logout, sendVerificationEmail, getIdToken }}
     >
       {children}
     </AuthContext.Provider>

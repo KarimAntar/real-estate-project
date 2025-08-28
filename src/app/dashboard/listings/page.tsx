@@ -23,9 +23,9 @@ type Listing = {
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listingsLoading, setListingsLoading] = useState(true); // renamed to avoid conflict
   const router = useRouter();
-  const { user, initializing } = useAuth(); // get current user + initializing state
+  const { user, loading } = useAuth();  // context loading
 
   const fetchListings = async () => {
     try {
@@ -37,16 +37,16 @@ export default function ListingsPage() {
         toast.error("Failed to load listings.", { toastId: "load-error" });
       }
     } finally {
-      setLoading(false);
+      setListingsLoading(false);
     }
   };
 
   // ✅ Wait until auth finishes initializing before fetching
   useEffect(() => {
-    if (!initializing && user) {
+    if (!loading && user) {
       fetchListings();
     }
-  }, [user, initializing]);
+  }, [user, loading]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this listing?")) return;
@@ -65,19 +65,17 @@ export default function ListingsPage() {
     router.push(`/dashboard/listings/add?id=${id}`);
   };
 
-  // ✅ Show loading while initializing
-if (initializing) {
-  return (
-    <DashboardLayout>
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        {/* Spinner */}
-        <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
-        <p className="text-gray-300 text-lg">Loading...</p>
-      </div>
-    </DashboardLayout>
-  );
-}
-
+  // ✅ Show loading while auth is initializing
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-96 space-y-4">
+          <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
+          <p className="text-gray-300 text-lg">Checking authentication...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -93,7 +91,7 @@ if (initializing) {
             </button>
           </div>
 
-          {loading ? (
+          {listingsLoading ? (
             <div className="flex flex-col items-center justify-center mt-10 space-y-4">
               <div className="w-12 h-12 border-4 border-t-4 border-gray-700 border-t-green-500 rounded-full animate-spin"></div>
               <p className="text-gray-300 text-lg">
