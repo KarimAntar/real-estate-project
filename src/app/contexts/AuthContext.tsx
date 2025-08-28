@@ -1,0 +1,128 @@
+"use client";
+
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { auth } from "@/app/firebase/firebaseConfig";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendEmailVerification,
+  updateProfile,
+  User,
+} from "firebase/auth";
+
+interface AppUser {
+  id: string;
+  email: string;
+  fullName?: string;
+  emailVerified?: boolean;
+}
+
+interface AuthContextProps {
+  user: AppUser | null;
+  initializing: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
+  getIdToken: () => Promise<string | null>;
+}
+
+const AuthContext = createContext<AuthContextProps | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [initializing, setInitializing] = useState(true);
+
+  const fetchToken = async (firebaseUser: User) => {
+    const token = await firebaseUser.getIdToken();
+    localStorage.setItem("jwtToken", token);
+    return token;
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        await fetchToken(firebaseUser);
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email || "",
+          fullName: firebaseUser.displayName || "",
+          emailVerified: firebaseUser.emailVerified,
+        });
+      } else {
+        localStorage.removeItem("jwtToken");
+        setUser(null);
+      }
+      setInitializing(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+    if (!userCredential.user.emailVerified) {
+      await signOut(auth);
+      throw new Error("Please verify your email before logging in.");
+    }
+
+    await fetchToken(userCredential.user);
+
+    setUser({
+      id: userCredential.user.uid,
+      email: userCredential.user.email || "",
+      fullName: userCredential.user.displayName || "",
+      emailVerified: userCredential.user.emailVerified,
+    });
+  };
+
+  const register = async (fullName: string, email: string, password: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, { displayName: fullName });
+      await sendEmailVerification(auth.currentUser);
+    }
+
+    await fetchToken(userCredential.user);
+
+    setUser({
+      id: userCredential.user.uid,
+      email: userCredential.user.email || "",
+      fullName,
+      emailVerified: userCredential.user.emailVerified,
+    });
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+    localStorage.removeItem("jwtToken");
+    setUser(null);
+  };
+
+  const sendVerificationEmail = async () => {
+    if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+  };
+
+  const getIdToken = async () => {
+    if (!auth.currentUser) return null;
+    return await auth.currentUser.getIdToken();
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{ user, initializing, login, register, logout, sendVerificationEmail, getIdToken }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
+};

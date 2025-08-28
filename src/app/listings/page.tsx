@@ -1,3 +1,5 @@
+//app/listings/page.tsx
+"use client";
 import Link from "next/link";
 import Image from "next/image";
 import { listings } from "@/data/listings";
