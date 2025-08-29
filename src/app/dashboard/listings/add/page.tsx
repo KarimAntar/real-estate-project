@@ -1,4 +1,3 @@
-// src/app/dashboard/listings/add/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,7 +12,14 @@ import {
 } from "@services/userService";
 import { ListingFormData, Listing } from "@/types/listing";
 import { toast } from "react-toastify";
-import { FaBed, FaBath, FaRulerCombined, FaTrash, FaPlus } from "react-icons/fa";
+import {
+  FaBed,
+  FaBath,
+  FaRulerCombined,
+  FaTrash,
+  FaPlus,
+  FaDollarSign,
+} from "react-icons/fa";
 
 export default function AddEditListingPage() {
   const router = useRouter();
@@ -41,7 +47,9 @@ export default function AddEditListingPage() {
     if (!listingId) return;
     getUserListings()
       .then((listings: Listing[]) => {
-        const listing = listings.find((l) => String(l.id) === String(listingId));
+        const listing = listings.find(
+          (l) => String(l.id) === String(listingId)
+        );
         if (!listing) return;
         setForm({
           title: listing.title,
@@ -59,7 +67,6 @@ export default function AddEditListingPage() {
       .catch((err) => console.error("Failed to load listing:", err));
   }, [listingId]);
 
-  // Handle input changes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -70,7 +77,6 @@ export default function AddEditListingPage() {
     }));
   };
 
-  // Handle new file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -89,7 +95,6 @@ export default function AddEditListingPage() {
     setProgress((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Upload new images
   const uploadImages = async (): Promise<string[]> => {
     if (!form.images.length) return [];
     setUploading(true);
@@ -119,7 +124,6 @@ export default function AddEditListingPage() {
     return urls;
   };
 
-  // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -144,7 +148,6 @@ export default function AddEditListingPage() {
     }
   };
 
-  // Delete listing
   const handleDelete = async () => {
     if (!listingId) return;
     try {
@@ -156,6 +159,9 @@ export default function AddEditListingPage() {
       toast.error("Failed to delete listing.");
     }
   };
+
+  const inputClass =
+    "w-full pl-10 p-2 rounded border-2 border-gray-700 bg-gray-800 text-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition";
 
   return (
     <DashboardLayout>
@@ -171,26 +177,32 @@ export default function AddEditListingPage() {
             placeholder="Title"
             value={form.title}
             onChange={handleChange}
-            className="w-full p-2 rounded bg-gray-800 text-gray-200"
+            className="w-full p-2 rounded border-2 border-gray-700 bg-gray-800 text-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition"
             required
           />
-          <input
-            type="number"
-            name="price"
-            placeholder="Price"
-            value={form.price}
-            onChange={handleChange}
-            className="w-full p-2 rounded bg-gray-800 text-gray-200"
-            required
-            min={0}
-          />
+
+          {/* Price input with icon */}
+          <div className="relative w-full">
+            <FaDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="number"
+              name="price"
+              placeholder="Price"
+              value={form.price}
+              onChange={handleChange}
+              className={inputClass}
+              required
+              min={0}
+            />
+          </div>
+
           <input
             type="text"
             name="city"
             placeholder="City"
             value={form.city}
             onChange={handleChange}
-            className="w-full p-2 rounded bg-gray-800 text-gray-200"
+            className={inputClass}
             required
           />
           <textarea
@@ -198,14 +210,14 @@ export default function AddEditListingPage() {
             placeholder="Description"
             value={form.description}
             onChange={handleChange}
-            className="w-full p-2 rounded bg-gray-800 text-gray-200"
+            className={inputClass}
             required
           />
           <select
             name="type"
             value={form.type}
             onChange={handleChange}
-            className="w-full p-2 rounded bg-gray-800 text-gray-200"
+            className={inputClass}
           >
             <option value="Home">Home</option>
             <option value="Villa">Villa</option>
@@ -213,40 +225,41 @@ export default function AddEditListingPage() {
             <option value="Commercial">Commercial</option>
           </select>
 
+          {/* Bedrooms / Bathrooms / Area inputs with icons */}
           <div className="flex gap-2">
-            <div className="flex items-center gap-1 w-1/3">
-              <FaBed className="text-gray-400" />
+            <div className="relative w-1/3">
+              <FaBed className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="number"
                 name="bedrooms"
                 placeholder="Bedrooms"
                 value={form.bedrooms}
                 onChange={handleChange}
-                className="w-full p-2 rounded bg-gray-800 text-gray-200"
+                className={inputClass}
                 min={1}
               />
             </div>
-            <div className="flex items-center gap-1 w-1/3">
-              <FaBath className="text-gray-400" />
+            <div className="relative w-1/3">
+              <FaBath className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="number"
                 name="bathrooms"
                 placeholder="Bathrooms"
                 value={form.bathrooms}
                 onChange={handleChange}
-                className="w-full p-2 rounded bg-gray-800 text-gray-200"
+                className={inputClass}
                 min={1}
               />
             </div>
-            <div className="flex items-center gap-1 w-1/3">
-              <FaRulerCombined className="text-gray-400" />
+            <div className="relative w-1/3">
+              <FaRulerCombined className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="number"
                 name="area"
                 placeholder="Area (sq ft)"
                 value={form.area}
                 onChange={handleChange}
-                className="w-full p-2 rounded bg-gray-800 text-gray-200"
+                className={inputClass}
                 min={1}
               />
             </div>
@@ -299,7 +312,9 @@ export default function AddEditListingPage() {
                       style={{ width: `${progress[i] || 100}%` }}
                     ></div>
                     <span className="absolute left-2 text-xs text-white truncate">
-                      {typeof file === "string" ? file.split("/").pop() : file.name}
+                      {typeof file === "string"
+                        ? file.split("/").pop()
+                        : file.name}
                     </span>
                     <button
                       type="button"
@@ -314,11 +329,11 @@ export default function AddEditListingPage() {
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex justify-between gap-2">
             {listingId && (
               <button
                 type="button"
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+                className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded transition"
                 onClick={handleDelete}
               >
                 Delete Listing
@@ -326,7 +341,7 @@ export default function AddEditListingPage() {
             )}
             <button
               type="submit"
-              className={`bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded ${
+              className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded transition ${
                 uploading ? "opacity-50 cursor-not-allowed" : ""
               }`}
               disabled={uploading}

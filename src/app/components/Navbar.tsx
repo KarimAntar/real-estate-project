@@ -4,18 +4,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, LogOut, LogIn, UserPlus } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
-  const { user, loading: authLoading } = useAuth(); 
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mounted, setMounted] = useState(false); // avoid hydration errors
 
-  // Logout with Firebase
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -27,11 +31,38 @@ export default function Navbar() {
     }
   };
 
-  // Toggle notifications dropdown
   const toggleNotifications = () => setShowNotifications(!showNotifications);
 
-  // If auth state is still loading, don't render navbar links yet
-  if (authLoading) return null; 
+  // SSR safe: show shimmer while auth state loading or component not mounted
+  if (!mounted || authLoading) {
+    return (
+      <nav className="bg-gray-900 p-4 shadow-lg relative z-10">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 rounded-full bg-gray-700 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 animate-shimmer" />
+            </div>
+            <div className="w-32 h-6 rounded-md bg-gray-700 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 animate-shimmer" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {Array(4)
+              .fill(0)
+              .map((_, i) => (
+                <div
+                  key={i}
+                  className="w-16 h-8 rounded-lg bg-gray-700 relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 animate-shimmer" />
+                </div>
+              ))}
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-gray-900 p-4 shadow-lg relative z-10">
@@ -52,16 +83,28 @@ export default function Navbar() {
 
         {/* Links + Auth */}
         <div className="flex items-center gap-4 relative">
-          <Link href="/" className="text-gray-200 hover:text-blue-400 transition">
+          <Link
+            href="/"
+            className="text-gray-200 hover:text-blue-400 transition"
+          >
             Home
           </Link>
-          <Link href="/listings" className="text-gray-200 hover:text-blue-400 transition">
+          <Link
+            href="/listings"
+            className="text-gray-200 hover:text-blue-400 transition"
+          >
             Listings
           </Link>
-          <Link href="/about" className="text-gray-200 hover:text-blue-400 transition">
+          <Link
+            href="/about"
+            className="text-gray-200 hover:text-blue-400 transition"
+          >
             About
           </Link>
-          <Link href="/contact" className="text-gray-200 hover:text-blue-400 transition">
+          <Link
+            href="/contact"
+            className="text-gray-200 hover:text-blue-400 transition"
+          >
             Contact
           </Link>
 
@@ -70,7 +113,7 @@ export default function Navbar() {
               {/* Notifications */}
               <button
                 onClick={toggleNotifications}
-                className="relative p-2 rounded-full hover:bg-gray-800 transition"
+                className="relative p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition"
               >
                 <Bell className="w-5 h-5 text-gray-200" />
                 <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] w-4 h-4 flex items-center justify-center rounded-full text-white">
@@ -82,21 +125,26 @@ export default function Navbar() {
                 <div className="absolute right-0 top-12 bg-gray-800 text-gray-200 rounded-lg shadow-lg w-64 p-4">
                   <h3 className="font-semibold mb-2">Notifications</h3>
                   <ul className="space-y-2 text-sm">
-                    <li className="p-2 rounded hover:bg-gray-700">📢 New listing created</li>
-                    <li className="p-2 rounded hover:bg-gray-700">✅ Profile updated successfully</li>
-                    <li className="p-2 rounded hover:bg-gray-700">💬 You have 2 new messages</li>
+                    <li className="p-2 rounded hover:bg-gray-700">
+                      📢 New listing created
+                    </li>
+                    <li className="p-2 rounded hover:bg-gray-700">
+                      ✅ Profile updated successfully
+                    </li>
+                    <li className="p-2 rounded hover:bg-gray-700">
+                      💬 You have 2 new messages
+                    </li>
                   </ul>
                 </div>
               )}
 
               <Link
                 href="/dashboard"
-                className="text-gray-200 hover:text-blue-400 font-medium transition"
+                className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
               >
                 Dashboard
               </Link>
 
-              {/* Logout */}
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 p-2 rounded-lg bg-red-600 hover:bg-red-700 shadow-md hover:scale-105 transition text-sm font-medium"
@@ -107,7 +155,6 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              {/* Login */}
               <Link
                 href="/auth/login"
                 className="flex items-center gap-2 p-2 rounded-lg bg-blue-600 hover:bg-blue-700 shadow-md hover:scale-105 transition text-sm font-medium"
@@ -115,8 +162,6 @@ export default function Navbar() {
                 <LogIn className="w-4 h-4 inline" />
                 Login
               </Link>
-
-              {/* Register */}
               <Link
                 href="/auth/register"
                 className="flex items-center gap-2 p-2 rounded-lg bg-green-600 hover:bg-green-700 shadow-md hover:scale-105 transition text-sm font-medium"

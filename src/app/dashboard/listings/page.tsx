@@ -23,9 +23,14 @@ type Listing = {
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
-  const [listingsLoading, setListingsLoading] = useState(true); // renamed to avoid conflict
+  const [loadingListings, setLoadingListings] = useState(true);
   const router = useRouter();
-  const { user, loading } = useAuth();  // context loading
+  const { user, loading: authLoading } = useAuth(); // renamed to avoid conflict
+  const [mounted, setMounted] = useState(false); // SSR safe
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchListings = async () => {
     try {
@@ -37,16 +42,15 @@ export default function ListingsPage() {
         toast.error("Failed to load listings.", { toastId: "load-error" });
       }
     } finally {
-      setListingsLoading(false);
+      setLoadingListings(false);
     }
   };
 
-  // ✅ Wait until auth finishes initializing before fetching
   useEffect(() => {
-    if (!loading && user) {
+    if (mounted && !authLoading && user) {
       fetchListings();
     }
-  }, [user, loading]);
+  }, [user, authLoading, mounted]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this listing?")) return;
@@ -65,13 +69,13 @@ export default function ListingsPage() {
     router.push(`/dashboard/listings/add?id=${id}`);
   };
 
-  // ✅ Show loading while auth is initializing
-  if (loading) {
+  // SSR + auth safe loading
+  if (!mounted || authLoading || loadingListings) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-96 space-y-4">
-          <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
-          <p className="text-gray-300 text-lg">Checking authentication...</p>
+          <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          <p className="text-gray-300 text-lg">Loading your listings...</p>
         </div>
       </DashboardLayout>
     );
@@ -85,25 +89,18 @@ export default function ListingsPage() {
             <h2 className="text-2xl font-bold">My Listings</h2>
             <button
               onClick={() => router.push("/dashboard/listings/add")}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded shadow-md transition hover:scale-105"
             >
               + Add Listing
             </button>
           </div>
 
-          {listingsLoading ? (
-            <div className="flex flex-col items-center justify-center mt-10 space-y-4">
-              <div className="w-12 h-12 border-4 border-t-4 border-gray-700 border-t-green-500 rounded-full animate-spin"></div>
-              <p className="text-gray-300 text-lg">
-                Loading your listings, please wait...
-              </p>
-            </div>
-          ) : listings.length === 0 ? (
+          {listings.length === 0 ? (
             <div className="text-center mt-10">
               <p className="text-gray-300 text-lg">No listings found.</p>
               <button
                 onClick={() => router.push("/dashboard/listings/add")}
-                className="mt-4 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded shadow-md transition hover:scale-105"
               >
                 + Add Listing
               </button>
@@ -113,7 +110,7 @@ export default function ListingsPage() {
               {listings.map((listing) => (
                 <div
                   key={listing.id}
-                  className="bg-gray-800 p-4 rounded-md shadow-md flex flex-col justify-between"
+                  className="bg-gray-800 p-4 rounded-md shadow-md flex flex-col justify-between hover:shadow-xl transition"
                 >
                   <div>
                     <h3 className="font-bold text-lg">{listing.title}</h3>
@@ -124,6 +121,7 @@ export default function ListingsPage() {
                       {listing.bedrooms} beds • {listing.bathrooms} baths • {listing.area} m² • {listing.type}
                     </p>
                   </div>
+
                   {listing.images.length > 0 && (
                     <div className="mt-2 flex space-x-2 overflow-x-auto">
                       {listing.images.map((img, i) => (
@@ -136,15 +134,16 @@ export default function ListingsPage() {
                       ))}
                     </div>
                   )}
+
                   <div className="flex space-x-2 mt-4">
                     <button
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded"
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
                       onClick={() => handleEdit(listing.id)}
                     >
                       Edit
                     </button>
                     <button
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
                       onClick={() => handleDelete(listing.id)}
                     >
                       Delete
