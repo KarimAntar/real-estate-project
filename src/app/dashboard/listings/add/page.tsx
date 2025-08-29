@@ -20,11 +20,13 @@ import {
   FaPlus,
   FaDollarSign,
 } from "react-icons/fa";
+import { useAuth } from "@/app/contexts/AuthContext"; // ✅ ensure we wait for auth
 
 export default function AddEditListingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const listingId = searchParams?.get("id");
+  const { user, loading } = useAuth(); // ✅ auth state
 
   const [form, setForm] = useState<ListingFormData>({
     title: "",
@@ -42,46 +44,94 @@ export default function AddEditListingPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
 
-  // Load existing listing if editing
+  const [errors, setErrors] = useState<Record<string, boolean>>({
+    title: false,
+    description: false,
+    price: false,
+    city: false,
+    bedrooms: false,
+    bathrooms: false,
+    area: false,
+  });
+
+  const baseNoIcon =
+  "w-full py-2.5 px-3 rounded-lg bg-gray-800 text-gray-200 outline-none transition";
+  const baseWithIcon =
+    "w-full py-2.5 pr-3 pl-10 rounded-lg bg-gray-800 text-gray-200 outline-none transition";
+    const baseTextareaWithIcon =
+  "w-full pt-3 pr-3 pl-10 pb-2 rounded-lg bg-gray-800 text-gray-200 outline-none transition resize-none";
+
+
+  const fieldClasses = (name: string, hasIcon = false) => {
+    const base = hasIcon ? baseWithIcon : baseNoIcon;
+    const errorClasses =
+      "border-2 border-red-500 focus:ring-2 focus:ring-red-500";
+    const normalClasses =
+      "border-2 border-gray-700 focus:border-green-500 focus:ring-1 focus:ring-green-500";
+    return `${base} ${errors[name] ? errorClasses : normalClasses}`;
+  };
+
+
+  // Load existing listing for edit
   useEffect(() => {
-    if (!listingId) return;
-    getUserListings()
-      .then((listings: Listing[]) => {
+    if (!listingId || loading || !user) return; // ✅ wait for auth to be ready
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const listings: Listing[] = await getUserListings();
+        if (cancelled) return;
         const listing = listings.find(
-          (l) => String(l.id) === String(listingId)
+          (l: Listing) => String(l.id) === String(listingId)
         );
         if (!listing) return;
+
         setForm({
-          title: listing.title,
-          description: listing.description,
-          price: String(listing.price),
-          city: listing.city,
-          type: listing.type,
-          bedrooms: listing.bedrooms,
-          bathrooms: listing.bathrooms,
-          area: listing.area,
+          title: listing.title || "",
+          description: listing.description || "",
+          price: listing.price ? String(listing.price) : "",
+          city: listing.city || "",
+          type: listing.type || "Home",
+          bedrooms: listing.bedrooms ?? 1,
+          bathrooms: listing.bathrooms ?? 1,
+          area: listing.area ?? 50,
           images: [],
         });
         setExistingImages(listing.images || []);
-      })
-      .catch((err) => console.error("Failed to load listing:", err));
-  }, [listingId]);
+      } catch (err) {
+        console.error("Failed to load listing:", err);
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, loading, user]);
+
+  const numericFields = ["bedrooms", "bathrooms", "area"];
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    const parsedValue: any = numericFields.includes(name)
+      ? value === "" ? "" : Number(value)
+      : value;
+
+    setForm((prev) => ({ ...prev, [name]: parsedValue } as any));
+    setErrors((prev) => ({ ...prev, [name]: false }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
-    setForm((prev) => ({ ...prev, images: files }));
-    setProgress(files.map(() => 0));
+    setForm((prev) => ({ ...prev, images: [...prev.images, ...files] }));
+    setProgress((prev) => [...prev, ...files.map(() => 0)]);
   };
 
   const removeExistingImage = (url: string) =>
@@ -96,18 +146,20 @@ export default function AddEditListingPage() {
   };
 
   const uploadImages = async (): Promise<string[]> => {
-    if (!form.images.length) return [];
+    const newFiles = form.images.filter((f) => !(typeof f === "string")) as File[];
+    if (!newFiles.length) return [];
+
     setUploading(true);
     const urls: string[] = [];
 
-    for (let i = 0; i < form.images.length; i++) {
-      const file = form.images[i];
+    for (let i = 0; i < newFiles.length; i++) {
+      const file = newFiles[i];
       try {
         const formData = new FormData();
         formData.append("file", file);
         const res = await uploadImage(formData);
-
         urls.push(res.urls[0]);
+
         setProgress((prev) => {
           const newProgress = [...prev];
           newProgress[i] = 100;
@@ -124,8 +176,68 @@ export default function AddEditListingPage() {
     return urls;
   };
 
+  const validateForm = () => {
+    const newErrors: Record<string, boolean> = {
+      title: false,
+      description: false,
+      price: false,
+      city: false,
+      bedrooms: false,
+      bathrooms: false,
+      area: false,
+    };
+    const missing: string[] = [];
+
+    if (!form.title || String(form.title).trim() === "") {
+      newErrors.title = true;
+      missing.push("Title");
+    }
+    if (!form.description || String(form.description).trim() === "") {
+      newErrors.description = true;
+      missing.push("Description");
+    }
+    const priceNum = Number(form.price);
+    if (form.price === "" || isNaN(priceNum) || priceNum <= 0) {
+      newErrors.price = true;
+      missing.push("Price (must be greater than 0)");
+    }
+    if (!form.city || String(form.city).trim() === "") {
+      newErrors.city = true;
+      missing.push("City");
+    }
+    if (!form.bedrooms || Number(form.bedrooms) <= 0) {
+      newErrors.bedrooms = true;
+      missing.push("Bedrooms (must be greater than 0)");
+    }
+    if (!form.bathrooms || Number(form.bathrooms) <= 0) {
+      newErrors.bathrooms = true;
+      missing.push("Bathrooms (must be greater than 0)");
+    }
+    if (!form.area || Number(form.area) <= 0) {
+      newErrors.area = true;
+      missing.push("Area (must be greater than 0)");
+    }
+
+    setErrors(newErrors);
+    return missing;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const missing = validateForm();
+    if (missing.length > 0) {
+      toast.error(
+        <div className="text-left">
+          <h3 className="font-semibold mb-1">⚠️ Missing information:</h3>
+          <ul className="ml-4 list-disc">
+            {missing.map((m) => <li key={m}>{m}</li>)}
+          </ul>
+        </div>,
+        { position: "top-center", autoClose: 4500 }
+      );
+      return;
+    }
+
     try {
       const uploadedUrls = await uploadImages();
       const listingData: ListingFormData = {
@@ -160,125 +272,177 @@ export default function AddEditListingPage() {
     }
   };
 
-  const inputClass =
-    "w-full pl-10 p-2 rounded border-2 border-gray-700 bg-gray-800 text-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition";
-
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto p-4">
-        <h2 className="text-2xl font-bold mb-4">
+      <div className="max-w-3xl mx-auto p-4 md:p-6">
+        <h2 className="text-2xl font-bold mb-6">
           {listingId ? "Edit Listing" : "Add Listing"}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            name="title"
-            placeholder="Title"
-            value={form.title}
-            onChange={handleChange}
-            className="w-full p-2 rounded border-2 border-gray-700 bg-gray-800 text-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition"
-            required
-          />
-
-          {/* Price input with icon */}
-          <div className="relative w-full">
-            <FaDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          {/* Title */}
+          <div>
             <input
-              type="number"
-              name="price"
-              placeholder="Price"
-              value={form.price}
+              type="text"
+              name="title"
+              placeholder="Title"
+              value={form.title}
               onChange={handleChange}
-              className={inputClass}
-              required
-              min={0}
+              className={fieldClasses("title")}
             />
+            <div className="min-h-[20px]">
+              {errors.title && <p className="text-red-500 text-sm">Title is required</p>}
+            </div>
           </div>
 
-          <input
-            type="text"
-            name="city"
-            placeholder="City"
-            value={form.city}
-            onChange={handleChange}
-            className={inputClass}
-            required
-          />
+        {/* Price + City */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Price */}
+          <div>
+            <div
+              className={`flex items-center rounded-lg px-3 border-2 ${
+                errors.price ? "border-red-500" : "border-gray-600"
+              }`}
+            >
+              <FaDollarSign className="text-gray-400 mr-2" />
+              <input
+                type="number"
+                name="price"
+                placeholder="Price"
+                value={form.price as any}
+                onChange={handleChange}
+                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
+              />
+            </div>
+            <div className="min-h-[20px]">
+              {errors.price && (
+                <p className="text-red-500 text-sm">Price must be greater than 0</p>
+              )}
+            </div>
+          </div>
+
+          {/* City */}
+          <div>
+            <input
+              type="text"
+              name="city"
+              placeholder="City"
+              value={form.city}
+              onChange={handleChange}
+              className={`w-full py-2.5 px-3 rounded-lg bg-gray-800 border-2 outline-none text-gray-200
+                ${errors.city ? "border-red-500" : "border-gray-600"}`}
+            />
+            <div className="min-h-[20px]">
+              {errors.city && <p className="text-red-500 text-sm">City is required</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Bedrooms / Bathrooms / Area */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Bedrooms */}
+          <div>
+            <div
+              className={`flex items-center rounded-lg px-3 border-2 ${
+                errors.bedrooms ? "border-red-500" : "border-gray-600"
+              }`}
+            >
+              <FaBed className="text-gray-400 mr-2" />
+              <input
+                type="number"
+                name="bedrooms"
+                placeholder="Bedrooms"
+                value={form.bedrooms as any}
+                onChange={handleChange}
+                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
+              />
+            </div>
+            <div className="min-h-[20px]">
+              {errors.bedrooms && (
+                <p className="text-red-500 text-sm">Bedrooms must be greater than 0</p>
+              )}
+            </div>
+          </div>
+
+          {/* Bathrooms */}
+          <div>
+            <div
+              className={`flex items-center rounded-lg px-3 border-2 ${
+                errors.bathrooms ? "border-red-500" : "border-gray-600"
+              }`}
+            >
+              <FaBath className="text-gray-400 mr-2" />
+              <input
+                type="number"
+                name="bathrooms"
+                placeholder="Bathrooms"
+                value={form.bathrooms as any}
+                onChange={handleChange}
+                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
+              />
+            </div>
+            <div className="min-h-[20px]">
+              {errors.bathrooms && (
+                <p className="text-red-500 text-sm">Bathrooms must be greater than 0</p>
+              )}
+            </div>
+          </div>
+
+          {/* Area */}
+          <div>
+            <div
+              className={`flex items-center rounded-lg px-3 border-2 ${
+                errors.area ? "border-red-500" : "border-gray-600"
+              }`}
+            >
+              <FaRulerCombined className="text-gray-400 mr-2" />
+              <input
+                type="number"
+                name="area"
+                placeholder="Area (sq ft)"
+                value={form.area as any}
+                onChange={handleChange}
+                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
+              />
+            </div>
+            <div className="min-h-[20px]">
+              {errors.area && (
+                <p className="text-red-500 text-sm">Area must be greater than 0</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="mt-3">
           <textarea
             name="description"
             placeholder="Description"
             value={form.description}
             onChange={handleChange}
-            className={inputClass}
-            required
+            rows={4}
+            className={`w-full px-3 py-2.5 rounded-lg bg-gray-800 border-2 outline-none text-gray-200 resize-none
+              ${errors.description ? "border-red-500" : "border-gray-600"}`}
           />
-          <select
-            name="type"
-            value={form.type}
-            onChange={handleChange}
-            className={inputClass}
-          >
-            <option value="Home">Home</option>
-            <option value="Villa">Villa</option>
-            <option value="Apartment">Apartment</option>
-            <option value="Commercial">Commercial</option>
-          </select>
-
-          {/* Bedrooms / Bathrooms / Area inputs with icons */}
-          <div className="flex gap-2">
-            <div className="relative w-1/3">
-              <FaBed className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="number"
-                name="bedrooms"
-                placeholder="Bedrooms"
-                value={form.bedrooms}
-                onChange={handleChange}
-                className={inputClass}
-                min={1}
-              />
-            </div>
-            <div className="relative w-1/3">
-              <FaBath className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="number"
-                name="bathrooms"
-                placeholder="Bathrooms"
-                value={form.bathrooms}
-                onChange={handleChange}
-                className={inputClass}
-                min={1}
-              />
-            </div>
-            <div className="relative w-1/3">
-              <FaRulerCombined className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="number"
-                name="area"
-                placeholder="Area (sq ft)"
-                value={form.area}
-                onChange={handleChange}
-                className={inputClass}
-                min={1}
-              />
-            </div>
+          <div className="min-h-[20px]">
+            {errors.description && (
+              <p className="text-red-500 text-sm">Description is required</p>
+            )}
           </div>
+        </div>
+
+
 
           {/* Existing images */}
           {existingImages.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {existingImages.map((img, i) => (
                 <div key={i} className="relative group">
-                  <img
-                    src={img}
-                    alt={`listing-${i}`}
-                    className="w-full h-24 object-cover rounded"
-                  />
+                  <img src={img} alt="" className="w-full h-28 object-cover rounded-lg" />
                   <button
                     type="button"
                     onClick={() => removeExistingImage(img)}
-                    className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100"
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
                   >
                     <FaTrash />
                   </button>
@@ -289,51 +453,19 @@ export default function AddEditListingPage() {
 
           {/* New images */}
           <div>
-            <label className="block mb-2">Upload Images</label>
-            <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded cursor-pointer text-white">
+            <label className="block mb-2 text-gray-300">Upload Images</label>
+            <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer text-white transition">
               <FaPlus /> Choose Files
-              <input
-                type="file"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
+              <input type="file" multiple onChange={handleFileChange} className="hidden" />
             </label>
-
-            {form.images.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {form.images.map((file, i) => (
-                  <div
-                    key={i}
-                    className="relative w-full bg-gray-700 rounded h-6 flex items-center"
-                  >
-                    <div
-                      className="bg-green-500 h-6 rounded"
-                      style={{ width: `${progress[i] || 100}%` }}
-                    ></div>
-                    <span className="absolute left-2 text-xs text-white truncate">
-                      {typeof file === "string"
-                        ? file.split("/").pop()
-                        : file.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeNewImage(i)}
-                      className="absolute right-2 text-red-500"
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          <div className="flex justify-between gap-2">
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-4">
             {listingId && (
               <button
                 type="button"
-                className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded transition"
+                className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-lg"
                 onClick={handleDelete}
               >
                 Delete Listing
@@ -341,16 +473,12 @@ export default function AddEditListingPage() {
             )}
             <button
               type="submit"
-              className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded transition ${
+              className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2.5 rounded-lg ${
                 uploading ? "opacity-50 cursor-not-allowed" : ""
               }`}
               disabled={uploading}
             >
-              {uploading
-                ? "Uploading..."
-                : listingId
-                ? "Update Listing"
-                : "Add Listing"}
+              {uploading ? "Uploading..." : listingId ? "Update Listing" : "Add Listing"}
             </button>
           </div>
         </form>

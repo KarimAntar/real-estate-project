@@ -2,6 +2,8 @@
 import "./globals.css";
 import ClientProviders from "./ClientProviders";
 import { Analytics } from "@vercel/analytics/next";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export const metadata = {
   title: "Real Estate Listings",
@@ -15,6 +17,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* ClientProviders is a client component */}
         <ClientProviders>{children}</ClientProviders>
         <Analytics />
+        
+        {/* Global Toast Notifications */}
+        <ToastContainer
+          position="top-center"   // ✅ Centered
+          autoClose={3000}        // ⏱ auto close after 3s
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          draggable               // ✅ Draggable to clear
+          pauseOnHover
+          theme="colored"
+        />
       </body>
     </html>
   );

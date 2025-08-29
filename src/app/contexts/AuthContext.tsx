@@ -13,7 +13,7 @@ import {
 } from "firebase/auth";
 
 interface AppUser {
-  id: string;
+  uid: string;
   email: string;
   fullName?: string;
   emailVerified?: boolean;
@@ -21,7 +21,7 @@ interface AppUser {
 
 interface AuthContextProps {
   user: AppUser | null;
-  loading: boolean; // updated from initializing
+  loading: boolean; // 🔹 auth initialization
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true); // renamed
+  const [loading, setLoading] = useState(true); // 🔹 initializing auth
 
   const fetchToken = async (firebaseUser: User) => {
     const token = await firebaseUser.getIdToken();
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         await fetchToken(firebaseUser);
         setUser({
-          id: firebaseUser.uid,
+          uid: firebaseUser.uid,
           email: firebaseUser.email || "",
           fullName: firebaseUser.displayName || "",
           emailVerified: firebaseUser.emailVerified,
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("jwtToken");
         setUser(null);
       }
-      setLoading(false);
+      setLoading(false); // ✅ done checking auth state
     });
 
     return () => unsubscribe();
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchToken(userCredential.user);
 
     setUser({
-      id: userCredential.user.uid,
+      uid: userCredential.user.uid,
       email: userCredential.user.email || "",
       fullName: userCredential.user.displayName || "",
       emailVerified: userCredential.user.emailVerified,
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchToken(userCredential.user);
 
     setUser({
-      id: userCredential.user.uid,
+      uid: userCredential.user.uid,
       email: userCredential.user.email || "",
       fullName,
       emailVerified: userCredential.user.emailVerified,

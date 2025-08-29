@@ -14,18 +14,18 @@ export default function ProtectedRoute({
   children,
   requireVerifiedEmail = false,
 }: ProtectedRouteProps) {
-  const { user, initializing, sendVerificationEmail } = useAuth(); // get initializing
+  const { user, loading, sendVerificationEmail } = useAuth(); // ✅ use loading
   const router = useRouter();
 
   // Redirect if not logged in after Firebase finishes initializing
   useEffect(() => {
-    if (!initializing && !user) {
+    if (!loading && !user) {
       router.push("/auth/login");
     }
-  }, [user, initializing, router]);
+  }, [user, loading, router]);
 
   // Show nothing while Firebase is initializing or redirecting
-  if (initializing || !user) {
+  if (loading || !user) {
     return null;
   }
 
