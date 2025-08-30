@@ -1,7 +1,17 @@
-// src/app/api/listings/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
+
+// Define Listing interface
+interface Listing {
+  id?: string;
+  title: string;
+  description: string;
+  price: number;
+  location: string;
+  userId?: string;
+  [key: string]: any; // optional for extra fields
+}
 
 // ----------------------
 // GET all listings for the logged-in user
@@ -18,11 +28,12 @@ export async function GET(req: NextRequest) {
       .where("userId", "==", userId)
       .get();
 
-    const listings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const listings: Listing[] = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Listing) }));
 
     return NextResponse.json(listings);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -31,7 +42,7 @@ export async function GET(req: NextRequest) {
 // ----------------------
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body: Listing = await req.json();
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -42,8 +53,9 @@ export async function POST(req: NextRequest) {
     await docRef.set({ ...body, userId });
 
     return NextResponse.json({ id: docRef.id, ...body });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -52,8 +64,12 @@ export async function POST(req: NextRequest) {
 // ----------------------
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body: Listing = await req.json();
     const { id, ...data } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Listing ID is required" }, { status: 400 });
+    }
 
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -65,10 +81,12 @@ export async function PUT(req: NextRequest) {
     await docRef.update({ ...data, userId });
 
     return NextResponse.json({ id, ...data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
 
 // ----------------------
 // DELETE a listing by ID
@@ -89,14 +107,14 @@ export async function DELETE(req: NextRequest) {
     const docSnap = await docRef.get();
     if (!docSnap.exists) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
 
-    // Optional: check if the user owns this listing
-    if (docSnap.data()?.userId !== userId) {
+    if ((docSnap.data() as Listing).userId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     await docRef.delete();
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

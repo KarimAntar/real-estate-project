@@ -1,5 +1,6 @@
 // app/layout.tsx
 import "./globals.css";
+import { poppins } from "./fonts";
 import ClientProviders from "./ClientProviders";
 import { Analytics } from "@vercel/analytics/next";
 import { ToastContainer } from "react-toastify";
@@ -12,7 +13,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={poppins.className}>
       <body className="bg-gray-900 text-white">
         {/* ClientProviders is a client component */}
         <ClientProviders>{children}</ClientProviders>

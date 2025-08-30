@@ -9,14 +9,32 @@ import { Bell, LogOut, LogIn, UserPlus } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  writeBatch,
+  Timestamp,
+} from "firebase/firestore";
+
+// Define notification type
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: Timestamp;
+}
 
 export default function Navbar() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
@@ -31,7 +49,10 @@ export default function Navbar() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const data: Notification[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<Notification, "id">),
+      }));
       setNotifications(data);
     });
 
@@ -93,11 +114,13 @@ export default function Navbar() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {Array(4).fill(0).map((_, i) => (
-              <div key={i} className="w-16 h-8 rounded-lg bg-gray-700 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 animate-shimmer" />
-              </div>
-            ))}
+            {Array(4)
+              .fill(0)
+              .map((_, i) => (
+                <div key={i} className="w-16 h-8 rounded-lg bg-gray-700 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700 animate-shimmer" />
+                </div>
+              ))}
           </div>
         </div>
       </nav>

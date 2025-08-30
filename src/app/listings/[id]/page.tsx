@@ -12,7 +12,8 @@ import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 
 export default function PropertyDetails() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params && typeof params.id === "string" ? params.id : Array.isArray(params?.id) ? params?.id[0] : undefined;
   const property = listings.find((item) => item.id === Number(id));
 
   const mainSlider = useRef<Slider>(null);
