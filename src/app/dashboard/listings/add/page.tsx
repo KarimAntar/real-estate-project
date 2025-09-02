@@ -1,10 +1,10 @@
 import DashboardLayout from "@components/dashboard/DashboardLayout";
-import AddEditListingForm from "./AddEditListingForm";
+import ListingAddClient from "./ListingAddClient";
 
 export default function Page() {
   return (
     <DashboardLayout>
-      <AddEditListingForm />
+      <ListingAddClient />
     </DashboardLayout>
   );
 }
