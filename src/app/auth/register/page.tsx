@@ -3,7 +3,18 @@
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { auth } from "../../firebase/firebaseConfig";
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+  sendEmailVerification,
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup,
+  fetchSignInMethodsForEmail,
+  signInWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
+} from "firebase/auth";
 import { toast } from "react-toastify";
 import { UserPlus } from "lucide-react";
 
@@ -26,7 +37,7 @@ export default function RegisterPage() {
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { displayName: fullName });
         await sendEmailVerification(auth.currentUser);
-        await signOut(auth); // log out immediately
+        await signOut(auth);
       }
 
       toast.success("Registration successful! Please verify your email before logging in.");
@@ -39,11 +50,30 @@ export default function RegisterPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    setLoading(true);
     const provider = new GoogleAuthProvider();
+
     try {
-      setLoading(true);
-      await signInWithPopup(auth, provider);
-      toast.success("Signed in with Google!");
+      const result = await signInWithPopup(auth, provider);
+      const googleEmail = result.user.email;
+      if (!googleEmail) throw new Error("No email found in Google account.");
+
+      // Check if the email exists as an email/password user
+      const methods = await fetchSignInMethodsForEmail(auth, googleEmail);
+
+      if (methods.includes("password")) {
+        // Prompt user for password to login
+        const existingPassword = prompt(`This email is already registered. Enter your password to login:`);
+
+        if (!existingPassword) throw new Error("Password required to login.");
+
+        // Sign in with email/password
+        await signInWithEmailAndPassword(auth, googleEmail, existingPassword);
+        toast.success("Signed in successfully!");
+      } else {
+        // New Google account
+        toast.success("Signed in with Google!");
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Google sign-in failed.");
@@ -79,29 +109,29 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto mt-20 p-6 bg-gray-800 rounded-md shadow-md space-y-6">
-      <h2 className="text-2xl font-bold text-center mb-4">Register</h2>
+    <div className="max-w-md mx-auto mt-20 p-6 bg-gray-800 rounded-md shadow-md">
+      <h2 className="text-2xl font-bold mb-6">Register</h2>
 
-      {/* Google Sign-In Button */}
+      {/* Google Sign-In */}
       <button
         onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded shadow hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded mb-4 hover:bg-gray-100 transition-colors"
       >
         <svg
-          className="w-5 h-5"
+          xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 48 48"
+          className="w-6 h-6"
         >
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
           <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
           <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
         </svg>
         Sign in with Google
       </button>
 
-      {/* OR separator */}
-      <div className="text-white text-center font-bold text-xl my-4">OR</div>
+      <div className="text-center text-white font-bold mb-4">OR</div>
 
       <form onSubmit={handleRegister} className="flex flex-col space-y-4">
         <input
@@ -128,7 +158,7 @@ export default function RegisterPage() {
           className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
-
+        
         <button
           type="submit"
           disabled={loading}
@@ -136,7 +166,7 @@ export default function RegisterPage() {
             loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
           }`}
         >
-          {loading ? "Registering..." : <><UserPlus size={18}/> Register</>}
+          {loading ? "Registering..." : <><UserPlus size={18} /> Register</>}
         </button>
       </form>
     </div>
