@@ -3,6 +3,7 @@ import axios from "axios";
 import { Listing, ListingFormData } from "@/types/listing";
 import { auth } from "@/app/firebase/firebaseConfig";
 
+
 // ----------------------
 // Axios instance
 // ----------------------
@@ -77,7 +78,7 @@ export const getUserListings = async (): Promise<Listing[]> => {
   }
 };
 // ✅ Add Listing
-export const addListing = async (listing: ListingFormData) => {
+export const addListing = async (listing: Listing) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
@@ -90,7 +91,7 @@ export const addListing = async (listing: ListingFormData) => {
 };
 
 // ✅ Update Listing
-export const updateListing = async (id: string, data: ListingFormData) => {
+export const updateListing = async (id: string, data: Listing) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
@@ -169,3 +170,4 @@ export function transformFormToListing(
     images: imageUrls,
   };
 }
+

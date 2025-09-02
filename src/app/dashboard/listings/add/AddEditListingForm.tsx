@@ -1,3 +1,4 @@
+// src/app/dashboard/listings/add/AddEditListingForm.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -36,8 +37,10 @@ export default function AddEditListingForm() {
     bedrooms: 1,
     bathrooms: 1,
     area: 50,
-    images: [],
+    existingImages: [],  // ✅ for already saved images
+    newImages: [],       // ✅ for newly selected files
   });
+
 
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -92,7 +95,8 @@ export default function AddEditListingForm() {
           bedrooms: listing.bedrooms ?? 1,
           bathrooms: listing.bathrooms ?? 1,
           area: listing.area ?? 50,
-          images: [],
+          existingImages: listing.images,
+          newImages: [],
         });
         setExistingImages(listing.images || []);
       } catch (err) {
@@ -123,53 +127,60 @@ export default function AddEditListingForm() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    setForm((prev) => ({ ...prev, images: [...prev.images, ...files] }));
-    setProgress((prev) => [...prev, ...files.map(() => 0)]);
-  };
+  if (!e.target.files) return;
+  const files = Array.from(e.target.files);
+  setForm((prev) => ({ ...prev, newImages: [...prev.newImages, ...files] }));
+  setProgress((prev) => [...prev, ...files.map(() => 0)]);
+};
 
-  const removeExistingImage = (url: string) =>
-    setExistingImages((prev) => prev.filter((img) => img !== url));
+
+  const removeExistingImage = (index: number) =>
+  setForm((prev) => ({
+    ...prev,
+    existingImages: prev.existingImages.filter((_, i) => i !== index),
+  }));
+
 
   const removeNewImage = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }));
-    setProgress((prev) => prev.filter((_, i) => i !== index));
-  };
+  setForm((prev) => ({
+    ...prev,
+    newImages: prev.newImages.filter((_, i) => i !== index),
+  }));
+  setProgress((prev) => prev.filter((_, i) => i !== index));
+};
+
 
   const uploadImages = async (): Promise<string[]> => {
-    const newFiles = form.images.filter((f) => !(typeof f === "string")) as File[];
-    if (!newFiles.length) return [];
+  const newFiles = form.newImages; // already guaranteed File[]
+  if (!newFiles.length) return [];
 
-    setUploading(true);
-    const urls: string[] = [];
+  setUploading(true);
+  const urls: string[] = [];
 
-    for (let i = 0; i < newFiles.length; i++) {
-      const file = newFiles[i];
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await uploadImage(formData);
-        urls.push(res.urls[0]);
+  for (let i = 0; i < newFiles.length; i++) {
+    const file = newFiles[i];
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await uploadImage(formData);
+      urls.push(res.urls[0]);
 
-        setProgress((prev) => {
-          const newProgress = [...prev];
-          newProgress[i] = 100;
-          return newProgress;
-        });
-      } catch (err) {
-        console.error("Upload failed:", err);
-        setUploading(false);
-        throw new Error("Failed to upload file");
-      }
+      setProgress((prev) => {
+        const newProgress = [...prev];
+        newProgress[i] = 100;
+        return newProgress;
+      });
+    } catch (err) {
+      console.error("Upload failed:", err);
+      setUploading(false);
+      throw new Error("Failed to upload file");
     }
+  }
 
-    setUploading(false);
-    return urls;
-  };
+  setUploading(false);
+  return urls;
+};
+
 
   const validateForm = () => {
     const newErrors: Record<string, boolean> = {
@@ -218,42 +229,67 @@ export default function AddEditListingForm() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const missing = validateForm();
-    if (missing.length > 0) {
-      toast.error(
-        <div className="text-left">
-          <h3 className="font-semibold mb-1">⚠️ Missing information:</h3>
-          <ul className="ml-4 list-disc">
-            {missing.map((m) => <li key={m}>{m}</li>)}
-          </ul>
-        </div>,
-        { position: "top-center", autoClose: 4500 }
-      );
-      return;
+  e.preventDefault();
+
+  // Validate required fields
+  const missing = validateForm();
+  if (missing.length > 0) {
+    toast.error(
+      <div className="text-left">
+        <h3 className="font-semibold mb-1">⚠️ Missing information:</h3>
+        <ul className="ml-4 list-disc">
+          {missing.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      </div>,
+      { position: "top-center", autoClose: 4500 }
+    );
+    return;
+  }
+
+  try {
+    // Upload new images
+    const uploadedUrls: string[] = await uploadImages();
+
+    // Ensure both arrays are strings
+    const allImages: string[] = [
+      ...(existingImages || []),
+      ...(uploadedUrls || []),
+    ];
+
+    const listingData: Listing = {
+      id: listingId || "", // if creating new, backend should generate ID
+      title: form.title,
+      description: form.description,
+      price: Number(form.price),
+      city: form.city,
+      type: form.type,
+      bedrooms: form.bedrooms,
+      bathrooms: form.bathrooms,
+      area: form.area,
+      images: allImages,
+};
+
+    if (listingId) {
+      await updateListing(listingId, listingData);
+      toast.success("✅ Listing updated!");
+    } else {
+      await addListing(listingData);
+      toast.success("✅ Listing added!");
     }
 
-    try {
-      const uploadedUrls = await uploadImages();
-      const listingData: ListingFormData = {
-        ...form,
-        images: [...existingImages, ...uploadedUrls],
-      };
+    router.push("/dashboard/listings");
+  } catch (err: any) {
+    console.error("Save listing error:", err);
 
-      if (listingId) {
-        await updateListing(listingId, listingData);
-        toast.success("Listing updated!");
-      } else {
-        await addListing(listingData);
-        toast.success("Listing added!");
-      }
+    // More detailed error feedback
+    toast.error(
+      `❌ Failed to save listing: ${err.message ?? JSON.stringify(err)}`
+    );
+  }
+};
 
-      router.push("/dashboard/listings");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to save listing.");
-    }
-  };
 
   const handleDelete = async () => {
     if (!listingId) return;
@@ -426,31 +462,98 @@ export default function AddEditListingForm() {
         </div>
 
         {/* Existing images */}
-        {existingImages.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {existingImages.map((img, i) => (
-              <div key={i} className="relative group">
-                <img src={img} alt="" className="w-full h-28 object-cover rounded-lg" />
-                <button
-                  type="button"
-                  onClick={() => removeExistingImage(img)}
-                  className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
-                >
-                  <FaTrash />
-                </button>
-              </div>
-            ))}
+        {form.existingImages.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Existing Images</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {form.existingImages.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={img}
+                    alt=""
+                    className="w-full h-28 object-cover rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeExistingImage(i)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
+                  >
+                    <FaTrash />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* New images */}
-        <div>
-          <label className="block mb-2 text-gray-300">Upload Images</label>
-          <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer text-white transition">
-            <FaPlus /> Choose Files
-            <input type="file" multiple onChange={handleFileChange} className="hidden" />
-          </label>
+        {/* New images (with progress) */}
+          {form.newImages.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">New Images</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {form.newImages.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={URL.createObjectURL(img)}
+                    alt=""
+                    className="w-full h-28 object-cover rounded-lg"
+                  />
+
+                  {/* Delete button */}
+                  <button
+                    type="button"
+                    onClick={() => removeNewImage(i)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
+                  >
+                    <FaTrash />
+                  </button>
+
+                  {/* Progress bar */}
+                  {progress[i] !== undefined && progress[i] < 100 && (
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-600">
+                      <div
+                        className="h-1 bg-green-500 transition-all"
+                        style={{ width: `${progress[i]}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+
+        {/* Upload button */}
+        <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Add Images
+        </label>
+
+        {/* Hidden file input */}
+        <input
+          id="file-upload"
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {/* Custom button label */}
+        <label
+          htmlFor="file-upload"
+          className="inline-block cursor-pointer rounded-lg bg-blue-50 px-4 py-2 
+                    text-sm font-semibold text-blue-700 shadow-sm 
+                    hover:bg-blue-100 transition"
+        >
+          Choose Files
+        </label>
         </div>
+
+
+
+
 
         {/* Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4">

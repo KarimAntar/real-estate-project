@@ -1,10 +1,13 @@
-// app/auth/login/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { LogIn } from "lucide-react";
+import Link from "next/link";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { auth } from "@/app/firebase/firebaseConfig";
 
 export default function LoginPage() {
   const { login, sendVerificationEmail } = useAuth();
@@ -13,11 +16,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [showVerifyNotice, setShowVerifyNotice] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // ⏳ Cooldown countdown
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (cooldown > 0) {
@@ -32,8 +33,6 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-
-      // only verified users pass through login
       toast.success("Login successful!");
       router.push("/dashboard");
     } catch (err: any) {
@@ -42,7 +41,7 @@ export default function LoginPage() {
       if (message.toLowerCase().includes("verify your email")) {
         toast.warning("Please verify your email before logging in.");
         setShowVerifyNotice(true);
-        setCooldown(60); // start cooldown at 60s
+        setCooldown(60);
       } else if (
         message.includes("auth/wrong-password") ||
         message.includes("auth/user-not-found")
@@ -66,9 +65,23 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      setLoading(true);
+      await signInWithPopup(auth, provider);
+      toast.success("Signed in with Google!");
+      router.push("/dashboard");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Google sign-in failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto mt-20 p-6 bg-gray-800 rounded-md shadow-md space-y-6">
-      {/* 📩 Verification notice appears above form */}
       {showVerifyNotice && (
         <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded-lg text-center">
           <h2 className="text-xl font-bold mb-2">Verify Your Email</h2>
@@ -90,9 +103,8 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* 🔐 Login form always visible */}
       <div>
-        <h2 className="text-2xl font-bold mb-6 text-white">Login</h2>
+        <h2 className="text-2xl font-bold mb-6 text-white text-center">Login</h2>
         <form onSubmit={handleLogin} className="flex flex-col space-y-4">
           <input
             type="email"
@@ -113,13 +125,43 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className={`bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors ${
+            className={`flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors ${
               loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
             }`}
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading ? "Logging in..." : <><LogIn size={18}/> Login</>}
           </button>
+
+          <p className="text-center text-sm text-blue-400 hover:underline cursor-pointer">
+            <Link href="/auth/forgot-password">Forgot my password?</Link>
+          </p>
         </form>
+
+        {/* Google Sign-In */}
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          className="w-full mt-4 flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded shadow hover:bg-gray-100 transition-colors"
+        >
+          {/* Google SVG */}
+          <svg
+            className="w-5 h-5"
+            viewBox="0 0 48 48"
+          >
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Sign in with Google
+        </button>
+
+        <p className="text-center text-gray-300 mt-4">
+          Not a member?{" "}
+          <Link href="/auth/register" className="text-blue-400 hover:underline">
+            Register here
+          </Link>
+        </p>
       </div>
     </div>
   );

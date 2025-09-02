@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
-import { Bell, LogOut, LogIn, UserPlus } from "lucide-react";
+import { Bell, LogOut, LogIn, UserPlus, House, List, Info, Mail } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
@@ -148,10 +148,37 @@ export default function Navbar() {
 
         {/* Links + Auth */}
         <div className="flex items-center gap-4 relative">
-          <Link href="/" className="text-gray-200 hover:text-blue-400 transition">Home</Link>
-          <Link href="/listings" className="text-gray-200 hover:text-blue-400 transition">Listings</Link>
-          <Link href="/about" className="text-gray-200 hover:text-blue-400 transition">About</Link>
-          <Link href="/contact" className="text-gray-200 hover:text-blue-400 transition">Contact</Link>
+          <Link
+            href="/"
+            className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
+          >
+            <House className="w-4 h-4" />
+            Home
+          </Link>
+
+          <Link
+            href="/listings"
+            className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
+          >
+            <List className="w-4 h-4" />
+            Listings
+          </Link>
+
+          <Link
+            href="/about"
+            className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
+          >
+            <Info className="w-4 h-4" />
+            About
+          </Link>
+
+          <Link
+            href="/contact"
+            className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
+          >
+            <Mail className="w-4 h-4" />
+            Contact
+          </Link>
 
           {user ? (
             <>

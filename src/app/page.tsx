@@ -196,7 +196,7 @@ export default function HomePage() {
         <h2 className="text-4xl font-bold mb-4">Want to List Your Property?</h2>
         <p className="mb-6 text-lg">Reach thousands of buyers by listing your property with us today.</p>
         <Link
-          href="/list-your-property"
+          href="/dashboard"
           className="bg-white text-blue-600 px-6 py-3 rounded-md font-semibold hover:bg-gray-200 transition"
         >
           List a Property

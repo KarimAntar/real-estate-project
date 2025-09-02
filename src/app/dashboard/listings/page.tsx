@@ -1,3 +1,4 @@
+// src/app/dashboard/listings/page.tsx
 "use client";
 
 import DashboardLayout from "@components/dashboard/DashboardLayout";
@@ -72,18 +73,20 @@ export default function ListingsPage() {
   // SSR + auth safe loading
   if (!mounted || authLoading || loadingListings) {
     return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center h-96 space-y-4">
-          <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin" />
-          <p className="text-gray-300 text-lg">Loading your listings...</p>
-        </div>
-      </DashboardLayout>
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="flex flex-col items-center justify-center h-96 space-y-4">
+            <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+            <p className="text-gray-300 text-lg">Loading your listings...</p>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <DashboardLayout>
-      <ProtectedRoute>
+    <ProtectedRoute>
+      <DashboardLayout>
         <div className="max-w-6xl mx-auto p-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">My Listings</h2>
@@ -118,7 +121,8 @@ export default function ListingsPage() {
                     <p className="mt-2">{listing.description}</p>
                     <p className="mt-2 font-semibold">${listing.price}</p>
                     <p className="mt-1 text-sm text-gray-400">
-                      {listing.bedrooms} beds • {listing.bathrooms} baths • {listing.area} m² • {listing.type}
+                      {listing.bedrooms} beds • {listing.bathrooms} baths •{" "}
+                      {listing.area} m² • {listing.type}
                     </p>
                   </div>
 
@@ -154,7 +158,7 @@ export default function ListingsPage() {
             </div>
           )}
         </div>
-      </ProtectedRoute>
-    </DashboardLayout>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }
