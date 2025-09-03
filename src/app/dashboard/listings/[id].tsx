@@ -1,103 +1,172 @@
-// src/app/dashboard/listings/[id].tsx
 "use client";
 
 import DashboardLayout from "../../components/dashboard/DashboardLayout";
 import ProtectedRoute from "../../components/dashboard/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { addListing, updateListing, getUserListings } from "../../services/userService";
+import {
+  addListing,
+  updateListing,
+  getUserListings,
+  uploadImage,
+  transformFormToListing,
+} from "../../services/userService";
 import { toast } from "react-toastify";
 import { ListingFormData } from "@/types/listing";
+import { useAuth } from "@contexts/AuthContext";
+import { useParams } from "next/navigation";
 
 export default function AddEditListingPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const listingId = params?.get("id"); // string | null
+  const params = useParams();
+  const listingId = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
-  // ✅ Form state matches ListingFormData
+  const { user, loading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  // Form state
   const [form, setForm] = useState<ListingFormData>({
     title: "",
     description: "",
     city: "",
-    price: "",  // string, matches ListingFormData
+    price: "", // string for input
     type: "Home",
     bedrooms: 1,
     bathrooms: 1,
     area: 50,
-    images: [],
+    existingImages: [],
+    newImages: [],
   });
 
-  // Fetch listing data if editing
-  useEffect(() => {
-    if (!listingId) return;
+  const [loading, setLoading] = useState(false);
 
-    (async () => {
-      try {
-        const listings = await getUserListings();
-        const listing = listings.find((l: any) => l.id === listingId); // compare as string
-        if (listing) {
-          setForm({
-            title: listing.title || "",
-            description: listing.description || "",
-            city: listing.city || "",
-            price: listing.price?.toString() || "", // ensure string
-            type: listing.type || "Home",
-            bedrooms: listing.bedrooms || 1,
-            bathrooms: listing.bathrooms || 1,
-            area: listing.area || 50,
-            images: listing.images || [],
-          });
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load listing data.");
+  // SSR safe
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Fetch listing if editing
+useEffect(() => {
+  if (!listingId || !user || authLoading) return; // wait for user
+
+  (async () => {
+    try {
+      const isAdmin = user.role === "admin";
+      const listings = await getUserListings(isAdmin);
+
+      const listing = listings.find((l) => l.id === listingId);
+      if (!listing) {
+        toast.error("Listing not found.");
+        return;
       }
-    })();
-  }, [listingId]);
+
+      setForm({
+        title: listing.title || "",
+        description: listing.description || "",
+        city: listing.city || "",
+        price: listing.price?.toString() || "",
+        type: listing.type || "Home",
+        bedrooms: listing.bedrooms || 1,
+        bathrooms: listing.bathrooms || 1,
+        area: listing.area || 50,
+        existingImages: listing.images || [],
+        newImages: [],
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load listing data.");
+    }
+  })();
+}, [listingId, user, authLoading]);
+
+
 
   // Handle input changes
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
+
+    if (["bedrooms", "bathrooms", "area"].includes(name)) {
+      setForm((prev) => ({
+        ...prev,
+        [name]: Number(value),
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+  };
+
+  // Handle image selection
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
     setForm((prev) => ({
       ...prev,
-      [name]: value,
+      newImages: Array.from(files),
     }));
   };
 
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
     try {
-      const payload = {
-        ...form,
-        // Convert numeric fields before sending to API
-        bedrooms: Number(form.bedrooms),
-        bathrooms: Number(form.bathrooms),
-        area: Number(form.area),
-        price: form.price.toString(), // ensure string for ListingFormData
-      };
+      // Upload new images first
+      let uploadedImageUrls: string[] = [];
+      if (form.newImages.length > 0) {
+        const formData = new FormData();
+        form.newImages.forEach((file) => formData.append("images", file));
+        const uploadRes = await uploadImage(formData);
+        uploadedImageUrls = uploadRes.urls || [];
+      }
+
+      // Combine existing + new images
+      const allImages = [...form.existingImages, ...uploadedImageUrls];
 
       if (listingId) {
-        await updateListing(listingId, payload);
+        // Update listing
+        await updateListing(listingId, {
+          title: form.title,
+          description: form.description,
+          city: form.city,
+          price: Number(form.price),
+          type: form.type,
+          bedrooms: form.bedrooms,
+          bathrooms: form.bathrooms,
+          area: form.area,
+          images: allImages,
+        });
         toast.success("Listing updated successfully!");
       } else {
-        await addListing(payload);
+        // Add new listing
+        const newListing = transformFormToListing(form, "", allImages);
+        await addListing(newListing);
         toast.success("Listing added successfully!");
       }
 
       router.push("/dashboard/listings");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Failed to save listing.");
+      toast.error(err.message || "Failed to save listing.");
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (!mounted || authLoading) return null;
 
   return (
     <DashboardLayout>
       <ProtectedRoute>
         <div className="max-w-2xl mx-auto bg-gray-800 p-6 rounded-md shadow-md mt-4">
-          <h2 className="text-2xl font-bold mb-4">{listingId ? "Edit Listing" : "Add Listing"}</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {listingId ? "Edit Listing" : "Add Listing"}
+          </h2>
           <form className="flex flex-col space-y-4" onSubmit={handleSubmit}>
             <input
               type="text"
@@ -127,7 +196,7 @@ export default function AddEditListingPage() {
               required
             />
             <input
-              type="text"
+              type="number"
               name="price"
               placeholder="Price"
               value={form.price}
@@ -135,7 +204,6 @@ export default function AddEditListingPage() {
               className="p-2 rounded bg-gray-700 text-white"
               required
             />
-
             <select
               name="type"
               value={form.type}
@@ -147,7 +215,6 @@ export default function AddEditListingPage() {
               <option value="Apartment">Apartment</option>
               <option value="Commercial">Commercial</option>
             </select>
-
             <div className="flex space-x-2">
               <input
                 type="number"
@@ -174,11 +241,15 @@ export default function AddEditListingPage() {
                 className="p-2 rounded bg-gray-700 text-white flex-1"
               />
             </div>
-
-            {/* TODO: Add images upload UI if needed */}
-
+            <input
+              type="file"
+              multiple
+              onChange={handleImageChange}
+              className="text-white"
+            />
             <button
               type="submit"
+              disabled={loading}
               className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
             >
               {listingId ? "Update Listing" : "Add Listing"}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import { auth } from "../../firebase/firebaseConfig";
+import { useRouter } from "next/navigation";
+import { auth, db } from "../../firebase/firebaseConfig";
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -12,15 +12,13 @@ import {
   signInWithPopup,
   fetchSignInMethodsForEmail,
   signInWithEmailAndPassword,
-  linkWithCredential,
-  EmailAuthProvider,
 } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { toast } from "react-toastify";
 import { UserPlus } from "lucide-react";
 
 export default function RegisterPage() {
-  const { sendVerificationEmail } = useAuth();
-
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,13 +33,24 @@ export default function RegisterPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
       if (auth.currentUser) {
+        // Update display name
         await updateProfile(auth.currentUser, { displayName: fullName });
-        await sendEmailVerification(auth.currentUser);
-        await signOut(auth);
-      }
 
-      toast.success("Registration successful! Please verify your email before logging in.");
-      setShowVerifyNotice(true);
+        // Save user to Firestore
+        await setDoc(doc(db, "users", auth.currentUser.uid), {
+          email,
+          fullName,
+          role: "user", // default role
+        });
+
+        // Send verification email
+        await sendEmailVerification(auth.currentUser);
+        toast.success("Verification email sent! Please check your inbox.");
+
+        // Sign out so user must verify
+        await signOut(auth);
+        setShowVerifyNotice(true);
+      }
     } catch (error: any) {
       toast.error(error.message || "Registration failed. Please try again.");
     } finally {
@@ -55,25 +64,38 @@ export default function RegisterPage() {
 
     try {
       const result = await signInWithPopup(auth, provider);
-      const googleEmail = result.user.email;
+      const googleUser = result.user;
+      const googleEmail = googleUser.email;
+
       if (!googleEmail) throw new Error("No email found in Google account.");
 
-      // Check if the email exists as an email/password user
+      // Check if email already exists as email/password
       const methods = await fetchSignInMethodsForEmail(auth, googleEmail);
 
       if (methods.includes("password")) {
-        // Prompt user for password to login
-        const existingPassword = prompt(`This email is already registered. Enter your password to login:`);
-
+        // Existing email/password user
+        const existingPassword = prompt(
+          `This email is already registered. Enter your password to login:`
+        );
         if (!existingPassword) throw new Error("Password required to login.");
 
-        // Sign in with email/password
         await signInWithEmailAndPassword(auth, googleEmail, existingPassword);
         toast.success("Signed in successfully!");
-      } else {
-        // New Google account
-        toast.success("Signed in with Google!");
       }
+
+      // Add Google user to Firestore if not exists
+      const userDocRef = doc(db, "users", googleUser.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (!docSnap.exists()) {
+        await setDoc(userDocRef, {
+          email: googleEmail,
+          fullName: googleUser.displayName || "",
+          role: "user",
+        });
+      }
+
+      // Redirect to dashboard
+      router.push("/dashboard");
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Google sign-in failed.");
@@ -117,11 +139,7 @@ export default function RegisterPage() {
         onClick={handleGoogleSignIn}
         className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded mb-4 hover:bg-gray-100 transition-colors"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 48 48"
-          className="w-6 h-6"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-6 h-6">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
           <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
@@ -158,7 +176,6 @@ export default function RegisterPage() {
           className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
-        
         <button
           type="submit"
           disabled={loading}

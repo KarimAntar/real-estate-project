@@ -9,6 +9,7 @@ import {
   getUserListings,
   deleteListing,
   uploadImage,
+  transformFormToListing,
 } from "@services/userService";
 import { ListingFormData, Listing } from "@/types/listing";
 import { toast } from "react-toastify";
@@ -17,10 +18,10 @@ import {
   FaBath,
   FaRulerCombined,
   FaTrash,
-  FaPlus,
   FaDollarSign,
 } from "react-icons/fa";
-import { useAuth } from "@/app/contexts/AuthContext"; // ✅ auth context
+import { useAuth } from "@/app/contexts/AuthContext";
+
 
 export default function AddEditListingForm() {
   const router = useRouter();
@@ -37,15 +38,12 @@ export default function AddEditListingForm() {
     bedrooms: 1,
     bathrooms: 1,
     area: 50,
-    existingImages: [],  // ✅ for already saved images
-    newImages: [],       // ✅ for newly selected files
+    existingImages: [],
+    newImages: [],
   });
 
-
-  const [existingImages, setExistingImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number[]>([]);
-
   const [errors, setErrors] = useState<Record<string, boolean>>({
     title: false,
     description: false,
@@ -56,131 +54,126 @@ export default function AddEditListingForm() {
     area: false,
   });
 
-  const baseNoIcon =
-    "w-full py-2.5 px-3 rounded-lg bg-gray-800 text-gray-200 outline-none transition";
-  const baseWithIcon =
-    "w-full py-2.5 pr-3 pl-10 rounded-lg bg-gray-800 text-gray-200 outline-none transition";
-  const baseTextareaWithIcon =
-    "w-full pt-3 pr-3 pl-10 pb-2 rounded-lg bg-gray-800 text-gray-200 outline-none transition resize-none";
+  const numericFields = ["bedrooms", "bathrooms", "area", "price"];
 
-  const fieldClasses = (name: string, hasIcon = false) => {
-    const base = hasIcon ? baseWithIcon : baseNoIcon;
+  const baseInput =
+    "w-full py-2.5 px-3 rounded-lg bg-gray-800 text-gray-200 outline-none transition border-2";
+  const baseIconInput =
+    "w-full py-2.5 pl-10 pr-3 rounded-lg bg-gray-800 text-gray-200 outline-none transition border-2";
+  const textareaInput =
+    "w-full pt-3 pr-3 pl-3 pb-2 rounded-lg bg-gray-800 text-gray-200 outline-none transition resize-none border-2";
+
+  const fieldClasses = (name: string, icon = false) => {
+    const base = icon ? baseIconInput : baseInput;
     const errorClasses =
-      "border-2 border-red-500 focus:ring-2 focus:ring-red-500";
+      "border-red-500 focus:ring-2 focus:ring-red-500 focus:border-red-500";
     const normalClasses =
-      "border-2 border-gray-700 focus:border-green-500 focus:ring-1 focus:ring-green-500";
+      "border-gray-600 focus:ring-1 focus:ring-green-500 focus:border-green-500";
     return `${base} ${errors[name] ? errorClasses : normalClasses}`;
   };
 
-  // Load existing listing for edit
+  // Load listing if editing
   useEffect(() => {
-    if (!listingId || loading || !user) return;
+  if (!listingId || loading || !user) return;
+  let cancelled = false;
 
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const listings: Listing[] = await getUserListings();
-        if (cancelled) return;
-        const listing = listings.find(
-          (l: Listing) => String(l.id) === String(listingId)
-        );
-        if (!listing) return;
+  const loadListing = async () => {
+    try {
+      // Fetch all listings if admin, else fetch only user's listings
+      const listings: Listing[] = await getUserListings(user.role === "admin"); 
+      if (cancelled) return;
 
-        setForm({
-          title: listing.title || "",
-          description: listing.description || "",
-          price: listing.price ? String(listing.price) : "",
-          city: listing.city || "",
-          type: listing.type || "Home",
-          bedrooms: listing.bedrooms ?? 1,
-          bathrooms: listing.bathrooms ?? 1,
-          area: listing.area ?? 50,
-          existingImages: listing.images,
-          newImages: [],
-        });
-        setExistingImages(listing.images || []);
-      } catch (err) {
-        console.error("Failed to load listing:", err);
+      const listing = listings.find((l) => String(l.id) === String(listingId));
+      if (!listing) {
+        toast.error("❌ Listing not found or you don't have permission.");
+        router.push("/dashboard/listings");
+        return;
       }
-    };
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [listingId, loading, user]);
+      setForm({
+        title: listing.title || "",
+        description: listing.description || "",
+        price: listing.price ? String(listing.price) : "",
+        city: listing.city || "",
+        type: listing.type || "Home",
+        bedrooms: listing.bedrooms ?? 1,
+        bathrooms: listing.bathrooms ?? 1,
+        area: listing.area ?? 50,
+        existingImages: listing.images,
+        newImages: [],
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("❌ Failed to load listing.");
+    }
+  };
 
-  const numericFields = ["bedrooms", "bathrooms", "area"];
+  loadListing();
+  return () => {
+    cancelled = true;
+  };
+}, [listingId, loading, user]);
+
+
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     const parsedValue: any = numericFields.includes(name)
       ? value === "" ? "" : Number(value)
       : value;
-
     setForm((prev) => ({ ...prev, [name]: parsedValue } as any));
     setErrors((prev) => ({ ...prev, [name]: false }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (!e.target.files) return;
-  const files = Array.from(e.target.files);
-  setForm((prev) => ({ ...prev, newImages: [...prev.newImages, ...files] }));
-  setProgress((prev) => [...prev, ...files.map(() => 0)]);
-};
-
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    setForm((prev) => ({ ...prev, newImages: [...prev.newImages, ...files] }));
+    setProgress((prev) => [...prev, ...files.map(() => 0)]);
+  };
 
   const removeExistingImage = (index: number) =>
-  setForm((prev) => ({
-    ...prev,
-    existingImages: prev.existingImages.filter((_, i) => i !== index),
-  }));
-
+    setForm((prev) => ({
+      ...prev,
+      existingImages: prev.existingImages.filter((_, i) => i !== index),
+    }));
 
   const removeNewImage = (index: number) => {
-  setForm((prev) => ({
-    ...prev,
-    newImages: prev.newImages.filter((_, i) => i !== index),
-  }));
-  setProgress((prev) => prev.filter((_, i) => i !== index));
-};
-
+    setForm((prev) => ({
+      ...prev,
+      newImages: prev.newImages.filter((_, i) => i !== index),
+    }));
+    setProgress((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const uploadImages = async (): Promise<string[]> => {
-  const newFiles = form.newImages; // already guaranteed File[]
-  if (!newFiles.length) return [];
-
-  setUploading(true);
-  const urls: string[] = [];
-
-  for (let i = 0; i < newFiles.length; i++) {
-    const file = newFiles[i];
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await uploadImage(formData);
-      urls.push(res.urls[0]);
-
-      setProgress((prev) => {
-        const newProgress = [...prev];
-        newProgress[i] = 100;
-        return newProgress;
-      });
-    } catch (err) {
-      console.error("Upload failed:", err);
-      setUploading(false);
-      throw new Error("Failed to upload file");
+    const newFiles = form.newImages;
+    if (!newFiles.length) return [];
+    setUploading(true);
+    const urls: string[] = [];
+    for (let i = 0; i < newFiles.length; i++) {
+      const file = newFiles[i];
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await uploadImage(formData);
+        urls.push(res.urls[0]);
+        setProgress((prev) => {
+          const copy = [...prev];
+          copy[i] = 100;
+          return copy;
+        });
+      } catch (err) {
+        console.error(err);
+        setUploading(false);
+        throw new Error("Failed to upload file");
+      }
     }
-  }
-
-  setUploading(false);
-  return urls;
-};
-
+    setUploading(false);
+    return urls;
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, boolean> = {
@@ -194,34 +187,34 @@ export default function AddEditListingForm() {
     };
     const missing: string[] = [];
 
-    if (!form.title || String(form.title).trim() === "") {
+    if (!form.title || !form.title.trim()) {
       newErrors.title = true;
       missing.push("Title");
     }
-    if (!form.description || String(form.description).trim() === "") {
+    if (!form.description || !form.description.trim()) {
       newErrors.description = true;
       missing.push("Description");
     }
     const priceNum = Number(form.price);
-    if (form.price === "" || isNaN(priceNum) || priceNum <= 0) {
+    if (!form.price || isNaN(priceNum) || priceNum <= 0) {
       newErrors.price = true;
-      missing.push("Price (must be greater than 0)");
+      missing.push("Price");
     }
-    if (!form.city || String(form.city).trim() === "") {
+    if (!form.city || !form.city.trim()) {
       newErrors.city = true;
       missing.push("City");
     }
     if (!form.bedrooms || Number(form.bedrooms) <= 0) {
       newErrors.bedrooms = true;
-      missing.push("Bedrooms (must be greater than 0)");
+      missing.push("Bedrooms");
     }
     if (!form.bathrooms || Number(form.bathrooms) <= 0) {
       newErrors.bathrooms = true;
-      missing.push("Bathrooms (must be greater than 0)");
+      missing.push("Bathrooms");
     }
     if (!form.area || Number(form.area) <= 0) {
       newErrors.area = true;
-      missing.push("Area (must be greater than 0)");
+      missing.push("Area");
     }
 
     setErrors(newErrors);
@@ -229,67 +222,30 @@ export default function AddEditListingForm() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
+    if (!user) return toast.error("❌ You must be logged in.");
 
-  // Validate required fields
-  const missing = validateForm();
-  if (missing.length > 0) {
-    toast.error(
-      <div className="text-left">
-        <h3 className="font-semibold mb-1">⚠️ Missing information:</h3>
-        <ul className="ml-4 list-disc">
-          {missing.map((m) => (
-            <li key={m}>{m}</li>
-          ))}
-        </ul>
-      </div>,
-      { position: "top-center", autoClose: 4500 }
-    );
-    return;
-  }
+    const missing = validateForm();
+    if (missing.length) return toast.error("⚠️ Missing fields.");
 
-  try {
-    // Upload new images
-    const uploadedUrls: string[] = await uploadImages();
+    try {
+      const uploadedUrls = await uploadImages();
+      const allImages = [...form.existingImages, ...uploadedUrls];
 
-    // Ensure both arrays are strings
-    const allImages: string[] = [
-      ...(existingImages || []),
-      ...(uploadedUrls || []),
-    ];
-
-    const listingData: Listing = {
-      id: listingId || "", // if creating new, backend should generate ID
-      title: form.title,
-      description: form.description,
-      price: Number(form.price),
-      city: form.city,
-      type: form.type,
-      bedrooms: form.bedrooms,
-      bathrooms: form.bathrooms,
-      area: form.area,
-      images: allImages,
-};
-
-    if (listingId) {
-      await updateListing(listingId, listingData);
-      toast.success("✅ Listing updated!");
-    } else {
-      await addListing(listingData);
-      toast.success("✅ Listing added!");
+      if (listingId) {
+        await updateListing(listingId, transformFormToListing(form, listingId, allImages));
+        toast.success("✅ Listing updated!");
+        router.push("/dashboard/listings");
+      } else {
+        const newListing = await addListing(transformFormToListing(form, "", allImages));
+        toast.success("✅ Listing added!");
+        router.push(`/dashboard/listings/add?id=${newListing.id}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`❌ Failed to save: ${err.message}`);
     }
-
-    router.push("/dashboard/listings");
-  } catch (err: any) {
-    console.error("Save listing error:", err);
-
-    // More detailed error feedback
-    toast.error(
-      `❌ Failed to save listing: ${err.message ?? JSON.stringify(err)}`
-    );
-  }
-};
-
+  };
 
   const handleDelete = async () => {
     if (!listingId) return;
@@ -303,276 +259,107 @@ export default function AddEditListingForm() {
     }
   };
 
+  if (loading) return null;
+
   return (
     <div className="max-w-3xl mx-auto p-4 md:p-6">
-      <h2 className="text-2xl font-bold mb-6">
-        {listingId ? "Edit Listing" : "Add Listing"}
-      </h2>
+      <h2 className="text-2xl font-bold mb-6">{listingId ? "Edit Listing" : "Add Listing"}</h2>
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {/* Title */}
-        <div>
-          <input
-            type="text"
-            name="title"
-            placeholder="Title"
-            value={form.title}
-            onChange={handleChange}
-            className={fieldClasses("title")}
-          />
-          <div className="min-h-[20px]">
-            {errors.title && <p className="text-red-500 text-sm">Title is required</p>}
-          </div>
-        </div>
+        <input
+          type="text"
+          name="title"
+          placeholder="Title"
+          value={form.title}
+          onChange={handleChange}
+          className={fieldClasses("title")}
+          disabled={uploading}
+        />
 
         {/* Price + City */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* Price */}
-          <div>
-            <div
-              className={`flex items-center rounded-lg px-3 border-2 ${
-                errors.price ? "border-red-500" : "border-gray-600"
-              }`}
-            >
-              <FaDollarSign className="text-gray-400 mr-2" />
-              <input
-                type="number"
-                name="price"
-                placeholder="Price"
-                value={form.price as any}
-                onChange={handleChange}
-                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
-              />
-            </div>
-            <div className="min-h-[20px]">
-              {errors.price && (
-                <p className="text-red-500 text-sm">Price must be greater than 0</p>
-              )}
-            </div>
+          <div className="flex items-center rounded-lg border-2 px-3" style={{ borderColor: errors.price ? "#f87171" : "#4b5563" }}>
+            <FaDollarSign className="mr-2 text-gray-400" />
+            <input type="number" name="price" placeholder="Price" value={form.price as any} onChange={handleChange} className="w-full py-2.5 bg-transparent text-gray-200 outline-none" disabled={uploading} />
           </div>
 
-          {/* City */}
-          <div>
-            <input
-              type="text"
-              name="city"
-              placeholder="City"
-              value={form.city}
-              onChange={handleChange}
-              className={`w-full py-2.5 px-3 rounded-lg bg-gray-800 border-2 outline-none text-gray-200
-                ${errors.city ? "border-red-500" : "border-gray-600"}`}
-            />
-            <div className="min-h-[20px]">
-              {errors.city && <p className="text-red-500 text-sm">City is required</p>}
-            </div>
-          </div>
+          <input type="text" name="city" placeholder="City" value={form.city} onChange={handleChange} className={fieldClasses("city")} disabled={uploading} />
         </div>
+
+        {/* Type */}
+        <select name="type" value={form.type} onChange={handleChange} className={fieldClasses("type")} disabled={uploading}>
+          <option value="Home">Home</option>
+          <option value="Apartment">Apartment</option>
+          <option value="Office">Office</option>
+          <option value="Other">Other</option>
+        </select>
 
         {/* Bedrooms / Bathrooms / Area */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Bedrooms */}
-          <div>
-            <div
-              className={`flex items-center rounded-lg px-3 border-2 ${
-                errors.bedrooms ? "border-red-500" : "border-gray-600"
-              }`}
-            >
-              <FaBed className="text-gray-400 mr-2" />
-              <input
-                type="number"
-                name="bedrooms"
-                placeholder="Bedrooms"
-                value={form.bedrooms as any}
-                onChange={handleChange}
-                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
-              />
-            </div>
-            <div className="min-h-[20px]">
-              {errors.bedrooms && (
-                <p className="text-red-500 text-sm">Bedrooms must be greater than 0</p>
-              )}
-            </div>
+          <div className="flex items-center rounded-lg border-2 px-3" style={{ borderColor: errors.bedrooms ? "#f87171" : "#4b5563" }}>
+            <FaBed className="mr-2 text-gray-400" />
+            <input type="number" name="bedrooms" placeholder="Bedrooms" value={form.bedrooms as any} onChange={handleChange} className="w-full py-2.5 bg-transparent text-gray-200 outline-none" disabled={uploading} />
           </div>
 
-          {/* Bathrooms */}
-          <div>
-            <div
-              className={`flex items-center rounded-lg px-3 border-2 ${
-                errors.bathrooms ? "border-red-500" : "border-gray-600"
-              }`}
-            >
-              <FaBath className="text-gray-400 mr-2" />
-              <input
-                type="number"
-                name="bathrooms"
-                placeholder="Bathrooms"
-                value={form.bathrooms as any}
-                onChange={handleChange}
-                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
-              />
-            </div>
-            <div className="min-h-[20px]">
-              {errors.bathrooms && (
-                <p className="text-red-500 text-sm">Bathrooms must be greater than 0</p>
-              )}
-            </div>
+          <div className="flex items-center rounded-lg border-2 px-3" style={{ borderColor: errors.bathrooms ? "#f87171" : "#4b5563" }}>
+            <FaBath className="mr-2 text-gray-400" />
+            <input type="number" name="bathrooms" placeholder="Bathrooms" value={form.bathrooms as any} onChange={handleChange} className="w-full py-2.5 bg-transparent text-gray-200 outline-none" disabled={uploading} />
           </div>
 
-          {/* Area */}
-          <div>
-            <div
-              className={`flex items-center rounded-lg px-3 border-2 ${
-                errors.area ? "border-red-500" : "border-gray-600"
-              }`}
-            >
-              <FaRulerCombined className="text-gray-400 mr-2" />
-              <input
-                type="number"
-                name="area"
-                placeholder="Area (sq ft)"
-                value={form.area as any}
-                onChange={handleChange}
-                className="w-full py-2.5 bg-transparent text-gray-200 outline-none"
-              />
-            </div>
-            <div className="min-h-[20px]">
-              {errors.area && (
-                <p className="text-red-500 text-sm">Area must be greater than 0</p>
-              )}
-            </div>
+          <div className="flex items-center rounded-lg border-2 px-3" style={{ borderColor: errors.area ? "#f87171" : "#4b5563" }}>
+            <FaRulerCombined className="mr-2 text-gray-400" />
+            <input type="number" name="area" placeholder="Area (sq ft)" value={form.area as any} onChange={handleChange} className="w-full py-2.5 bg-transparent text-gray-200 outline-none" disabled={uploading} />
           </div>
         </div>
 
         {/* Description */}
-        <div className="mt-3">
-          <textarea
-            name="description"
-            placeholder="Description"
-            value={form.description}
-            onChange={handleChange}
-            rows={4}
-            className={`w-full px-3 py-2.5 rounded-lg bg-gray-800 border-2 outline-none text-gray-200 resize-none
-              ${errors.description ? "border-red-500" : "border-gray-600"}`}
-          />
-          <div className="min-h-[20px]">
-            {errors.description && (
-              <p className="text-red-500 text-sm">Description is required</p>
-            )}
-          </div>
-        </div>
+        <textarea name="description" placeholder="Description" value={form.description} onChange={handleChange} rows={4} className={textareaInput} disabled={uploading} />
 
-        {/* Existing images */}
+        {/* Existing Images */}
         {form.existingImages.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Existing Images</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {form.existingImages.map((img, i) => (
-                <div key={i} className="relative group">
-                  <img
-                    src={img}
-                    alt=""
-                    className="w-full h-28 object-cover rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeExistingImage(i)}
-                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
-                  >
-                    <FaTrash />
-                  </button>
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {form.existingImages.map((img, i) => (
+              <div key={i} className="relative group">
+                <img src={img} alt="" className="w-full h-28 object-cover rounded-lg" />
+                <button type="button" onClick={() => removeExistingImage(i)} className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100" disabled={uploading}>
+                  <FaTrash />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* New images (with progress) */}
-          {form.newImages.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">New Images</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {form.newImages.map((img, i) => (
-                <div key={i} className="relative group">
-                  <img
-                    src={URL.createObjectURL(img)}
-                    alt=""
-                    className="w-full h-28 object-cover rounded-lg"
-                  />
-
-                  {/* Delete button */}
-                  <button
-                    type="button"
-                    onClick={() => removeNewImage(i)}
-                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100"
-                  >
-                    <FaTrash />
-                  </button>
-
-                  {/* Progress bar */}
-                  {progress[i] !== undefined && progress[i] < 100 && (
-                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-600">
-                      <div
-                        className="h-1 bg-green-500 transition-all"
-                        style={{ width: `${progress[i]}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+        {/* New Images */}
+        {form.newImages.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {form.newImages.map((img, i) => (
+              <div key={i} className="relative group">
+                <img src={URL.createObjectURL(img)} alt="" className="w-full h-28 object-cover rounded-lg" />
+                <button type="button" onClick={() => removeNewImage(i)} className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded opacity-0 group-hover:opacity-100" disabled={uploading}>
+                  <FaTrash />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-
-        {/* Upload button */}
+        {/* File Upload */}
         <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Add Images
-        </label>
-
-        {/* Hidden file input */}
-        <input
-          id="file-upload"
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleFileChange}
-          className="hidden"
-        />
-
-        {/* Custom button label */}
-        <label
-          htmlFor="file-upload"
-          className="inline-block cursor-pointer rounded-lg bg-blue-50 px-4 py-2 
-                    text-sm font-semibold text-blue-700 shadow-sm 
-                    hover:bg-blue-100 transition"
-        >
-          Choose Files
-        </label>
+          <label htmlFor="file-upload" className="cursor-pointer inline-block px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition font-semibold text-sm">
+            Choose Files
+          </label>
+          <input id="file-upload" type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} disabled={uploading} />
         </div>
-
-
-
-
 
         {/* Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-4">
+        <div className="flex justify-end gap-3 pt-4">
           {listingId && (
-            <button
-              type="button"
-              className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-lg"
-              onClick={handleDelete}
-            >
-              Delete Listing
+            <button type="button" className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-lg" onClick={handleDelete} disabled={uploading}>
+              Delete
             </button>
           )}
-          <button
-            type="submit"
-            className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2.5 rounded-lg ${
-              uploading ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            disabled={uploading}
-          >
+          <button type="submit" className={`bg-green-500 hover:bg-green-600 text-white px-6 py-2.5 rounded-lg ${uploading ? "opacity-50 cursor-not-allowed" : ""}`} disabled={uploading}>
             {uploading ? "Uploading..." : listingId ? "Update Listing" : "Add Listing"}
           </button>
         </div>

@@ -8,19 +8,7 @@ import { getUserListings, deleteListing } from "@services/userService";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/AuthContext";
-
-type Listing = {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  bedrooms: number;
-  bathrooms: number;
-  area: number;
-  city: string;
-  type: "Home" | "Villa" | "Apartment" | "Commercial";
-  images: string[];
-};
+import { Listing } from "@/types/listing";
 
 export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -34,8 +22,12 @@ export default function ListingsPage() {
   }, []);
 
   const fetchListings = async () => {
+    if (!user) return;
+
     try {
-      const data = await getUserListings();
+      // Fetch all listings if admin, else only user's listings
+      const data = await getUserListings(user.role === "admin");
+
       setListings(data);
     } catch (err) {
       console.error(err);
@@ -67,7 +59,7 @@ export default function ListingsPage() {
   };
 
   const handleEdit = (id: string) => {
-    router.push(`/dashboard/listings/add?id=${id}`);
+  router.push(`/dashboard/listings/${id}`);
   };
 
   // SSR + auth safe loading
@@ -77,7 +69,7 @@ export default function ListingsPage() {
         <DashboardLayout>
           <div className="flex flex-col items-center justify-center h-96 space-y-4">
             <div className="w-12 h-12 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin" />
-            <p className="text-gray-300 text-lg">Loading your listings...</p>
+            <p className="text-gray-300 text-lg">Loading listings...</p>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -89,7 +81,9 @@ export default function ListingsPage() {
       <DashboardLayout>
         <div className="max-w-6xl mx-auto p-4">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">My Listings</h2>
+            <h2 className="text-2xl font-bold">
+              {user?.role === "admin" ? "All Listings" : "My Listings"}
+            </h2>
             <button
               onClick={() => router.push("/dashboard/listings/add")}
               className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded shadow-md transition hover:scale-105"
@@ -139,20 +133,24 @@ export default function ListingsPage() {
                     </div>
                   )}
 
-                  <div className="flex space-x-2 mt-4">
-                    <button
-                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
-                      onClick={() => handleEdit(listing.id)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
-                      onClick={() => handleDelete(listing.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  {user &&
+                    (user.role === "admin" || listing.ownerId === user.uid) && (
+                      <div className="flex space-x-2 mt-4">
+                        <button
+                        className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
+                        onClick={() => router.push(`/dashboard/listings/add?id=${listing.id}`)}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
+                          onClick={() => handleDelete(listing.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                 </div>
               ))}
             </div>

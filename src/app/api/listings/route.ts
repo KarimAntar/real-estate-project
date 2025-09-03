@@ -1,21 +1,34 @@
+// src/app/api/listings/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
 
-// Define Listing interface
+// Listing interface
 interface Listing {
   id?: string;
   title: string;
   description: string;
   price: number;
-  location: string;
+  city: string;
+  type?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  area?: number;
+  images?: string[];
   userId?: string;
-  [key: string]: any; // optional for extra fields
+  [key: string]: any;
 }
 
 // ----------------------
-// GET all listings for the logged-in user
+// Helper: get user data & admin status
+const getUserData = async (uid: string) => {
+  const userDoc = await db.collection("users").doc(uid).get();
+  if (!userDoc.exists) return { role: "user" };
+  return userDoc.data() as { role?: string };
+};
+
 // ----------------------
+// GET all listings
 export async function GET(req: NextRequest) {
   try {
     const token = req.headers.get("authorization")?.split(" ")[1];
@@ -24,12 +37,20 @@ export async function GET(req: NextRequest) {
     const decoded = await getAuth().verifyIdToken(token);
     const userId = decoded.uid;
 
-    const snapshot = await db.collection("listings")
-      .where("userId", "==", userId)
-      .get();
+    const userData = await getUserData(userId);
+    const isAdmin = userData.role === "admin";
 
-    const listings: Listing[] = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Listing) }));
+    const url = new URL(req.url);
+    const isAdminQuery = url.searchParams.get("admin") === "true";
 
+    let snapshot;
+    if (isAdmin && isAdminQuery) {
+      snapshot = await db.collection("listings").get(); // all listings
+    } else {
+      snapshot = await db.collection("listings").where("userId", "==", userId).get(); // only user's
+    }
+
+    const listings = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Listing) }));
     return NextResponse.json(listings);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -38,8 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ----------------------
-// CREATE a new listing
-// ----------------------
+// POST create new listing
 export async function POST(req: NextRequest) {
   try {
     const body: Listing = await req.json();
@@ -60,16 +80,13 @@ export async function POST(req: NextRequest) {
 }
 
 // ----------------------
-// UPDATE an existing listing
-// ----------------------
+// PUT update listing
 export async function PUT(req: NextRequest) {
   try {
     const body: Listing = await req.json();
     const { id, ...data } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: "Listing ID is required" }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: "Listing ID required" }, { status: 400 });
 
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -77,9 +94,21 @@ export async function PUT(req: NextRequest) {
     const decoded = await getAuth().verifyIdToken(token);
     const userId = decoded.uid;
 
-    const docRef = db.collection("listings").doc(id);
-    await docRef.update({ ...data, userId });
+    const userData = await getUserData(userId);
+    const isAdmin = userData.role === "admin";
 
+    const docRef = db.collection("listings").doc(id);
+    const listingSnap = await docRef.get();
+    if (!listingSnap.exists) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+
+    const listingData = listingSnap.data() as Listing;
+
+    // Only owner or admin can update
+    if (listingData.userId !== userId && !isAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await docRef.update({ ...data });
     return NextResponse.json({ id, ...data });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -87,15 +116,13 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-
 // ----------------------
-// DELETE a listing by ID
-// ----------------------
+// DELETE listing
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    if (!id) return NextResponse.json({ error: "Listing ID is required" }, { status: 400 });
+    if (!id) return NextResponse.json({ error: "Listing ID required" }, { status: 400 });
 
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -103,11 +130,17 @@ export async function DELETE(req: NextRequest) {
     const decoded = await getAuth().verifyIdToken(token);
     const userId = decoded.uid;
 
-    const docRef = db.collection("listings").doc(id);
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    const userData = await getUserData(userId);
+    const isAdmin = userData.role === "admin";
 
-    if ((docSnap.data() as Listing).userId !== userId) {
+    const docRef = db.collection("listings").doc(id);
+    const listingSnap = await docRef.get();
+    if (!listingSnap.exists) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+
+    const listingData = listingSnap.data() as Listing;
+
+    // Only owner or admin can delete
+    if (listingData.userId !== userId && !isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

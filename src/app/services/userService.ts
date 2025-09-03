@@ -2,13 +2,11 @@
 import axios from "axios";
 import { Listing, ListingFormData } from "@/types/listing";
 import { auth } from "@/app/firebase/firebaseConfig";
+import { v4 as uuidv4 } from "uuid"; // <- added for unique IDs
 
-
-// ----------------------
 // Axios instance
-// ----------------------
 const api = axios.create({
-  baseURL: "/api", // relative to your Next.js app
+  baseURL: "/api",
 });
 
 // ----------------------
@@ -24,11 +22,7 @@ export const registerUser = async (
   email: string,
   password: string
 ) => {
-  const res = await api.post("/auth/register", {
-    fullName,
-    email,
-    password,
-  });
+  const res = await api.post("/auth/register", { fullName, email, password });
   return res.data;
 };
 
@@ -60,105 +54,98 @@ export const updateUserProfile = async (data: any) => {
 // ----------------------
 // Listings
 // ----------------------
-export const getUserListings = async (): Promise<Listing[]> => {
-  try {
-    const user = auth.currentUser;
-    if (!user) throw new Error("User not authenticated");
-
-    const token = await user.getIdToken(); // use live token instead of localStorage
-
-    const res = await api.get("/listings", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    return Array.isArray(res.data) ? res.data : [];
-  } catch (err: any) {
-    console.error("Failed to fetch listings:", err.response?.data || err.message || err);
-    throw new Error(err.response?.data?.error || err.message || "Failed to fetch listings");
-  }
-};
-// ✅ Add Listing
-export const addListing = async (listing: Listing) => {
+export const getUserListings = async (admin = false): Promise<Listing[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
-  const payload = { ...listing, price: Number(listing.price) };
-  const response = await api.post("/listings", payload, {
+  const res = await api.get("/listings", {
     headers: { Authorization: `Bearer ${token}` },
+    params: admin ? { admin: "true" } : {},
   });
-  return response.data;
+
+  // Ensure each listing has an id
+  return Array.isArray(res.data)
+    ? res.data.map((l) => ({ ...l, id: l.id || uuidv4() }))
+    : [];
 };
 
-// ✅ Update Listing
-export const updateListing = async (id: string, data: Listing) => {
+// Add Listing
+export const addListing = async (listing: Listing): Promise<Listing> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+
+  const token = await user.getIdToken();
+
+  // Generate an ID if missing
+  if (!listing.id) listing.id = uuidv4();
+
+  const res = await api.post("/listings", listing, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  return res.data; // should include `id`
+};
+
+// Update Listing
+export const updateListing = async (
+  id: string,
+  data: Partial<Omit<Listing, "id" | "ownerId">>
+) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
   const payload = {
-    title: data.title,
-    description: data.description,
-    city: data.city,
-    type: data.type,
-    price: Number(data.price),
-    bedrooms: Number(data.bedrooms),
-    bathrooms: Number(data.bathrooms),
-    area: Number(data.area),
-    images: data.images || [],
+    ...data,
+    price: data.price !== undefined ? Number(data.price) : undefined,
   };
 
-  try {
-    const res = await api.put(`/listings/${id}`, payload, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  const res = await api.put(`/listings/${id}`, payload, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
-    if (res.status !== 200) {
-      throw new Error(res.data?.error || "Failed to update listing");
-    }
-
-    return res.data;
-  } catch (err: any) {
-    console.error("Error updating listing:", err.response?.data || err);
-    throw new Error(err.response?.data?.error || err.message || "Failed to update listing");
-  }
+  return res.data;
 };
 
-// ✅ Delete Listing
-export const deleteListing = async (id: string | number) => {
+// Delete Listing
+export const deleteListing = async (id: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
-  const res = await api.delete(`/listings/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await api.delete(`/listings?id=${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
-
-  if (res.status !== 200) {
-    throw new Error("Delete failed");
-  }
+  return res.data;
 };
 
-// ✅ Upload Image
+// Upload Image
 export const uploadImage = async (formData: FormData) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
-  const response = await api.post("/listings/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
+  const res = await api.post("/listings/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+      Authorization: `Bearer ${token}`,
+    },
   });
-  return response.data;
+  return res.data;
 };
 
-// ✅ Transform form -> API listing
+// Transform form -> Listing
 export function transformFormToListing(
   form: ListingFormData,
-  id: string,
-  imageUrls: string[]
+  id?: string,
+  imageUrls: string[] = []
 ): Listing {
   return {
-    id,
+    id: id || uuidv4(), // always ensure unique ID
+    ownerId: auth.currentUser?.uid || "",
     title: form.title,
     description: form.description,
     price: Number(form.price),
@@ -170,4 +157,3 @@ export function transformFormToListing(
     images: imageUrls,
   };
 }
-
