@@ -1,8 +1,9 @@
 // src/app/services/userService.ts
 import axios from "axios";
 import { Listing, ListingFormData } from "@/types/listing";
-import { auth } from "@/app/firebase/firebaseConfig";
-import { v4 as uuidv4 } from "uuid"; // <- added for unique IDs
+import { auth, db } from "@/app/firebase/firebaseConfig";
+import { v4 as uuidv4 } from "uuid";
+import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
 
 // Axios instance
 const api = axios.create({
@@ -54,43 +55,27 @@ export const updateUserProfile = async (data: any) => {
 // ----------------------
 // Listings
 // ----------------------
-export const getUserListings = async (admin = false): Promise<Listing[]> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
-  const token = await user.getIdToken();
-
-  const res = await api.get("/listings", {
-    headers: { Authorization: `Bearer ${token}` },
-    params: admin ? { admin: "true" } : {},
-  });
-
-  // Ensure each listing has an id
-  return Array.isArray(res.data)
-    ? res.data.map((l) => ({ ...l, id: l.id || uuidv4() }))
-    : [];
-};
 
 // Add Listing
 export const addListing = async (listing: Listing): Promise<Listing> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
-
   const token = await user.getIdToken();
 
-  // Generate an ID if missing
+  // Generate ID if missing
   if (!listing.id) listing.id = uuidv4();
 
   const res = await api.post("/listings", listing, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  return res.data; // should include `id`
+  return res.data;
 };
 
 // Update Listing
 export const updateListing = async (
   id: string,
-  data: Partial<Omit<Listing, "id" | "ownerId">>
+  data: Partial<Omit<Listing, "userId">>
 ) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
@@ -101,6 +86,7 @@ export const updateListing = async (
     price: data.price !== undefined ? Number(data.price) : undefined,
   };
 
+  // PUT to dynamic route /listings/:id
   const res = await api.put(`/listings/${id}`, payload, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -114,13 +100,16 @@ export const deleteListing = async (id: string) => {
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
-  const res = await api.delete(`/listings?id=${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  // DELETE to dynamic route /listings/:id
+  const res = await api.delete(`/listings/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
+
   return res.data;
 };
+
+
+
 
 // Upload Image
 export const uploadImage = async (formData: FormData) => {
@@ -157,3 +146,52 @@ export function transformFormToListing(
     images: imageUrls,
   };
 }
+
+// ----------------------
+// Listings
+// ----------------------
+
+// 🔹 User: get listings by specific userId (Firestore query)
+export const getListingsByUser = async (uid: string): Promise<Listing[]> => {
+  const q = query(collection(db, "listings"), where("ownerId", "==", uid));
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data() as Listing;
+    return {
+      docId: docSnap.id,   // Firestore document ID (for edit/delete)
+      ...data,             // internal id, title, etc.
+    };
+  });
+};
+
+// 🔹 Admin: get all listings with user info
+export async function getAllListingsWithUsers(): Promise<Listing[]> {
+  const listingsSnap = await getDocs(collection(db, "listings"));
+  const listings: Listing[] = [];
+
+  for (const listingDoc of listingsSnap.docs) {
+    const listingData = listingDoc.data() as Listing;
+    let userName = "Unknown User";
+    let userEmail = "";
+
+    if (listingData.ownerId) {
+      const userDoc = await getDoc(doc(db, "users", listingData.ownerId));
+      if (userDoc.exists()) {
+      const userData = userDoc.data();
+      userName = userData?.fullName || "Unnamed";
+      userEmail = userData?.email || "";
+      }
+
+    }
+
+    listings.push({
+      docId: listingDoc.id, // Firestore document ID
+      ...listingData,
+      userName,
+      userEmail,
+    });
+  }
+
+  return listings;
+};

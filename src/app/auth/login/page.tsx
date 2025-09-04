@@ -30,6 +30,12 @@ export default function LoginPage() {
   const [showVerifyNotice, setShowVerifyNotice] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
+  // ❌ invalid credentials highlight
+  const [invalidFields, setInvalidFields] = useState<{ email: boolean; password: boolean }>({
+    email: false,
+    password: false,
+  });
+
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (cooldown > 0) {
@@ -41,6 +47,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setInvalidFields({ email: false, password: false }); // reset before each try
 
     try {
       await setPersistence(
@@ -53,17 +60,20 @@ export default function LoginPage() {
       router.push("/dashboard");
     } catch (err: any) {
       const message = err.message || "";
+
       if (message.toLowerCase().includes("verify your email")) {
         toast.warning("Please verify your email before logging in.");
         setShowVerifyNotice(true);
         setCooldown(60);
       } else if (
         message.includes("auth/wrong-password") ||
-        message.includes("auth/user-not-found")
+        message.includes("auth/user-not-found") ||
+        message.includes("auth/invalid-credential")
       ) {
-        toast.error("Wrong email or password.");
+        toast.error("Incorrect email or password.");
+        setInvalidFields({ email: true, password: true }); // highlight both
       } else {
-        toast.error(message || "Login failed. Please try again.");
+        toast.error("Login failed. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -73,7 +83,7 @@ export default function LoginPage() {
   const handleResendVerification = async () => {
     try {
       await sendVerificationEmail();
-      toast.success("Verification email resent!");
+      toast.success("📧 Verification email resent!");
       setCooldown(60);
     } catch (err: any) {
       toast.error(err.message || "Failed to resend verification email.");
@@ -96,7 +106,6 @@ export default function LoginPage() {
 
       if (!googleEmail) throw new Error("No email found in Google account.");
 
-      // Check if email exists as email/password
       const methods = await fetchSignInMethodsForEmail(auth, googleEmail);
 
       if (methods.includes("password")) {
@@ -106,10 +115,10 @@ export default function LoginPage() {
         if (!existingPassword) throw new Error("Password required to login.");
 
         await signInWithEmailAndPassword(auth, googleEmail, existingPassword);
-        toast.success("Signed in successfully with your registered account!");
+        toast.success("✅ Signed in successfully with your registered account!");
       }
 
-      // Add Google user to Firestore if first-time login
+      // Save Google user if first login
       const userDocRef = doc(db, "users", googleUser.uid);
       const docSnap = await getDoc(userDocRef);
       if (!docSnap.exists()) {
@@ -118,7 +127,7 @@ export default function LoginPage() {
           fullName: googleUser.displayName || "",
           role: "user",
         });
-        toast.success("First-time Google login saved to database!");
+        toast.success("🎉 First-time Google login saved to database!");
       }
 
       router.push("/dashboard");
@@ -136,7 +145,8 @@ export default function LoginPage() {
         <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded-lg text-center">
           <h2 className="text-xl font-bold mb-2">Verify Your Email</h2>
           <p className="mb-4">
-            Your email <strong>{email}</strong> is not verified. Please check your inbox (or spam folder) and click the verification link.
+            Your email <strong>{email}</strong> is not verified. Please check your inbox (or spam
+            folder) and click the verification link.
           </p>
           <button
             onClick={handleResendVerification}
@@ -157,16 +167,28 @@ export default function LoginPage() {
         onClick={handleGoogleSignIn}
         className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded mb-4 hover:bg-gray-100 transition-colors"
       >
+        {/* Google Logo */}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-6 h-6">
-          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          <path fill="none" d="M0 0h48v48H0z"/>
+          <path
+            fill="#EA4335"
+            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+          />
+          <path
+            fill="#4285F4"
+            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+          />
+          <path
+            fill="#34A853"
+            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+          />
+          <path fill="none" d="M0 0h48v48H0z" />
         </svg>
         Sign in with Google
       </button>
-
 
       <p className="text-center text-white font-bold my-2">OR</p>
 
@@ -177,7 +199,11 @@ export default function LoginPage() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 ${
+            invalidFields.email
+              ? "border-2 border-red-500 focus:ring-red-500"
+              : "focus:ring-blue-500"
+          }`}
           required
         />
         <input
@@ -185,7 +211,11 @@ export default function LoginPage() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 ${
+            invalidFields.password
+              ? "border-2 border-red-500 focus:ring-red-500"
+              : "focus:ring-blue-500"
+          }`}
           required
         />
 

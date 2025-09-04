@@ -6,10 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   addListing,
   updateListing,
-  getUserListings,
+  getListingsByUser,
   deleteListing,
   uploadImage,
   transformFormToListing,
+  getAllListingsWithUsers,
 } from "@services/userService";
 import { ListingFormData, Listing } from "@/types/listing";
 import { toast } from "react-toastify";
@@ -73,19 +74,32 @@ export default function AddEditListingForm() {
   };
 
   // Load listing if editing
-  useEffect(() => {
+// Load listing if editing
+useEffect(() => {
   if (!listingId || loading || !user) return;
   let cancelled = false;
 
   const loadListing = async () => {
     try {
-      // Fetch all listings if admin, else fetch only user's listings
-      const listings: Listing[] = await getUserListings(user.role === "admin"); 
+      let listings: Listing[];
+
+      if (user.role === "admin") {
+        // ✅ Admin gets all listings
+        listings = await getAllListingsWithUsers();
+      } else {
+        // ✅ Normal user gets only their own listings
+        listings = await getListingsByUser(user.uid);
+      }
+
       if (cancelled) return;
 
-      const listing = listings.find((l) => String(l.id) === String(listingId));
+      // match either UUID id or Firestore docId
+      const listing = listings.find(
+        (l) => l.id === listingId || l.docId === listingId
+      );
+
       if (!listing) {
-        toast.error("❌ Listing not found or you don't have permission.");
+        toast.error("Listing not found or you don't have permission.");
         router.push("/dashboard/listings");
         return;
       }
@@ -101,10 +115,11 @@ export default function AddEditListingForm() {
         area: listing.area ?? 50,
         existingImages: listing.images,
         newImages: [],
+        docId: listing.docId,
       });
     } catch (err) {
       console.error(err);
-      toast.error("❌ Failed to load listing.");
+      toast.error("Failed to load listing.");
     }
   };
 
@@ -223,40 +238,42 @@ export default function AddEditListingForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return toast.error("❌ You must be logged in.");
+    if (!user) return toast.error("You must be logged in.");
 
     const missing = validateForm();
-    if (missing.length) return toast.error("⚠️ Missing fields.");
+    if (missing.length) return toast.error("Missing fields.");
 
     try {
       const uploadedUrls = await uploadImages();
       const allImages = [...form.existingImages, ...uploadedUrls];
 
-      if (listingId) {
-        await updateListing(listingId, transformFormToListing(form, listingId, allImages));
-        toast.success("✅ Listing updated!");
-        router.push("/dashboard/listings");
-      } else {
-        const newListing = await addListing(transformFormToListing(form, "", allImages));
-        toast.success("✅ Listing added!");
-        router.push(`/dashboard/listings/add?id=${newListing.id}`);
-      }
+      if (listingId && form.docId) {
+      await updateListing(form.docId, transformFormToListing(form, listingId, allImages));
+      toast.success("Listing updated!");
+      router.push("/dashboard/listings");
+    } else {
+      const newListing = await addListing(transformFormToListing(form, "", allImages));
+      toast.success("Listing added!");
+      router.push(`/dashboard/listings/add?id=${newListing.id}`);
+    }
+
     } catch (err: any) {
       console.error(err);
-      toast.error(`❌ Failed to save: ${err.message}`);
+      toast.error(`Failed to save: ${err.message}`);
     }
   };
 
   const handleDelete = async () => {
-    if (!listingId) return;
+    if (!listingId || !form.docId) return;
     try {
-      await deleteListing(listingId);
+      await deleteListing(form.docId); // ✅ Use docId
       toast.success("Listing deleted!");
       router.push("/dashboard/listings");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Failed to delete listing.");
+      toast.error(`Failed to delete listing: ${err.message}`);
     }
+
   };
 
   if (loading) return null;

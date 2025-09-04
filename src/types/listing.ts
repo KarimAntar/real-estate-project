@@ -2,7 +2,8 @@
 
 // What your DB / API expects
 export interface Listing {
-  id: string;
+  id: string;                  // business ID / UUID
+  docId?: string;              // Firestore document ID (optional)
   title: string;
   description: string;
   price: number;
@@ -12,7 +13,9 @@ export interface Listing {
   city: string;
   type: "Home" | "Villa" | "Apartment" | "Commercial";
   images: string[];
-  ownerId: string; // <-- add this
+  ownerId: string;             // <-- add this
+  userName?: string;           // <-- fetched from users collection
+  userEmail?: string;          // optional (for fallback or debugging)
 }
 
 // What the form gives you
@@ -26,10 +29,9 @@ export interface ListingFormData {
   bathrooms: number;
   area: number;
   existingImages: string[]; // already uploaded images
-  newImages: File[];        // newly selected files
+  newImages: File[];
+  docId?: string;        // newly selected files
 }
-
-
 
 // ✅ The payload you send to DB
 export type ListingPayload = Omit<ListingFormData, "newImages" | "existingImages" | "price"> & {

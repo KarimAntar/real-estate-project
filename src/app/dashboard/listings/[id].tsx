@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   addListing,
   updateListing,
-  getUserListings,
+  getListingsByUser,
   uploadImage,
   transformFormToListing,
 } from "../../services/userService";
@@ -45,14 +45,21 @@ export default function AddEditListingPage() {
     setMounted(true);
   }, []);
 
-  // Fetch listing if editing
+// Fetch listing if editing
 useEffect(() => {
   if (!listingId || !user || authLoading) return; // wait for user
 
   (async () => {
     try {
-      const isAdmin = user.role === "admin";
-      const listings = await getUserListings(isAdmin);
+      let listings: Listing[] = [];
+
+      if (user.role === "admin") {
+        // 🔹 Admin can fetch all listings
+        listings = await getAllListingsWithUsers();
+      } else {
+        // 🔹 Regular user: only their own listings
+        listings = await getUserListings(user.uid);
+      }
 
       const listing = listings.find((l) => l.id === listingId);
       if (!listing) {
@@ -78,6 +85,7 @@ useEffect(() => {
     }
   })();
 }, [listingId, user, authLoading]);
+
 
 
 

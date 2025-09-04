@@ -25,38 +25,52 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showVerifyNotice, setShowVerifyNotice] = useState(false);
 
+  // Track invalid fields
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
+
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      if (auth.currentUser) {
-        // Update display name
-        await updateProfile(auth.currentUser, { displayName: fullName });
+    if (auth.currentUser) {
+      // Update display name
+      await updateProfile(auth.currentUser, { displayName: fullName });
 
-        // Save user to Firestore
-        await setDoc(doc(db, "users", auth.currentUser.uid), {
-          email,
-          fullName,
-          role: "user", // default role
-        });
+      // Save user to Firestore
+      await setDoc(doc(db, "users", auth.currentUser.uid), {
+        email,
+        fullName,
+        role: "user", // default role
+      });
 
-        // Send verification email
-        await sendEmailVerification(auth.currentUser);
-        toast.success("Verification email sent! Please check your inbox.");
+      // Send verification email
+      await sendEmailVerification(auth.currentUser);
+      toast.success("Verification email sent! Please check your inbox.");
 
-        // Sign out so user must verify
-        await signOut(auth);
-        setShowVerifyNotice(true);
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Registration failed. Please try again.");
-    } finally {
-      setLoading(false);
+      // Sign out so user must verify
+      await signOut(auth);
+      setShowVerifyNotice(true);
     }
-  };
+  } catch (error: any) {
+    let message = "Registration failed. Please try again.";
+
+    if (error.code === "auth/email-already-in-use") {
+      message = "Email already registered";
+    } else if (error.code === "auth/invalid-email") {
+      message = "Invalid email format";
+    } else if (error.code === "auth/weak-password") {
+      message = "Password should be at least 6 characters";
+    }
+
+    toast.error(message);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -73,7 +87,6 @@ export default function RegisterPage() {
       const methods = await fetchSignInMethodsForEmail(auth, googleEmail);
 
       if (methods.includes("password")) {
-        // Existing email/password user
         const existingPassword = prompt(
           `This email is already registered. Enter your password to login:`
         );
@@ -94,7 +107,6 @@ export default function RegisterPage() {
         });
       }
 
-      // Redirect to dashboard
       router.push("/dashboard");
     } catch (err: any) {
       console.error(err);
@@ -139,6 +151,7 @@ export default function RegisterPage() {
         onClick={handleGoogleSignIn}
         className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded mb-4 hover:bg-gray-100 transition-colors"
       >
+        {/* Google Icon */}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-6 h-6">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -157,24 +170,27 @@ export default function RegisterPage() {
           placeholder="Full Name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
+          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            invalidFields.includes("fullName") ? "border border-red-500" : ""
+          }`}
         />
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
+          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            invalidFields.includes("email") ? "border border-red-500" : ""
+          }`}
         />
         <input
           type="password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
+          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            invalidFields.includes("password") ? "border border-red-500" : ""
+          }`}
         />
         <button
           type="submit"

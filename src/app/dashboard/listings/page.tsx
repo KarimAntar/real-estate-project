@@ -4,7 +4,7 @@
 import DashboardLayout from "@components/dashboard/DashboardLayout";
 import ProtectedRoute from "@components/dashboard/ProtectedRoute";
 import { useEffect, useState } from "react";
-import { getUserListings, deleteListing } from "@services/userService";
+import { getListingsByUser, deleteListing, getAllListingsWithUsers } from "@services/userService";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/AuthContext";
@@ -14,19 +14,27 @@ export default function ListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(true);
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth(); // renamed to avoid conflict
-  const [mounted, setMounted] = useState(false); // SSR safe
+  const { user, loading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const fetchListings = async () => {
-    if (!user) return;
+    if (!user) return; // ✅ guard clause
 
     try {
-      // Fetch all listings if admin, else only user's listings
-      const data = await getUserListings(user.role === "admin");
+      const uid = user.uid;   // ✅ narrowed here
+      const role = user.role; // ✅ narrowed here
+
+      let data: Listing[] = [];
+
+      if (role === "admin") {
+        data = await getAllListingsWithUsers();
+      } else {
+        data = await getListingsByUser(uid);
+      }
 
       setListings(data);
     } catch (err) {
@@ -39,30 +47,30 @@ export default function ListingsPage() {
     }
   };
 
+
+
+
   useEffect(() => {
     if (mounted && !authLoading && user) {
       fetchListings();
     }
   }, [user, authLoading, mounted]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this listing?")) return;
+const handleDelete = async (listing: Listing) => {
+  if (!listing.docId) return toast.error("Missing docId for this listing.");
+  if (!confirm("Are you sure you want to delete this listing?")) return;
 
-    try {
-      await deleteListing(id);
-      setListings((prev) => prev.filter((l) => l.id !== id));
-      toast.success("Listing deleted!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete listing.");
-    }
-  };
+  try {
+    await deleteListing(listing.docId);  // 🔹 Use docId, not id
+    setListings((prev) => prev.filter((l) => l.docId !== listing.docId));
+    toast.success("Listing deleted!");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to delete listing.");
+  }
+};
 
-  const handleEdit = (id: string) => {
-  router.push(`/dashboard/listings/${id}`);
-  };
 
-  // SSR + auth safe loading
   if (!mounted || authLoading || loadingListings) {
     return (
       <ProtectedRoute>
@@ -118,6 +126,13 @@ export default function ListingsPage() {
                       {listing.bedrooms} beds • {listing.bathrooms} baths •{" "}
                       {listing.area} m² • {listing.type}
                     </p>
+
+                    {/* 🔹 Show user info for admin */}
+                    {user?.role === "admin" && (
+                      <p className="mt-2 text-sm text-blue-400">
+                        Listed by: {listing.userName} ({listing.userEmail})
+                      </p>
+                    )}
                   </div>
 
                   {listing.images.length > 0 && (
@@ -137,15 +152,16 @@ export default function ListingsPage() {
                     (user.role === "admin" || listing.ownerId === user.uid) && (
                       <div className="flex space-x-2 mt-4">
                         <button
-                        className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
-                        onClick={() => router.push(`/dashboard/listings/add?id=${listing.id}`)}
+                          className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
+                          onClick={() =>
+                            router.push(`/dashboard/listings/add?id=${listing.id}`)
+                          }
                         >
                           Edit
                         </button>
-
                         <button
                           className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
-                          onClick={() => handleDelete(listing.id)}
+                          onClick={() => handleDelete(listing)}
                         >
                           Delete
                         </button>
