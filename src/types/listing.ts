@@ -13,9 +13,11 @@ export interface Listing {
   city: string;
   type: "Home" | "Villa" | "Apartment" | "Commercial";
   images: string[];
-  ownerId: string;             // <-- add this
-  userName?: string;           // <-- fetched from users collection
-  userEmail?: string;          // optional (for fallback or debugging)
+  ownerId: string;             // User who owns this listing
+  userName?: string;           // Fetched from users collection (optional)
+  userEmail?: string;          // Optional (for fallback or debugging)
+  createdAt?: string;          // ✅ Added timestamp fields
+  updatedAt?: string;          // ✅ Added timestamp fields
 }
 
 // What the form gives you
@@ -29,12 +31,14 @@ export interface ListingFormData {
   bathrooms: number;
   area: number;
   existingImages: string[]; // already uploaded images
-  newImages: File[];
-  docId?: string;        // newly selected files
+  newImages: File[];        // newly selected files
+  docId?: string;           // Firestore document ID for editing
 }
 
 // ✅ The payload you send to DB
 export type ListingPayload = Omit<ListingFormData, "newImages" | "existingImages" | "price"> & {
   price: number;
   images: string[];
+  createdAt?: string;         // ✅ Added timestamp fields
+  updatedAt?: string;         // ✅ Added timestamp fields
 };
