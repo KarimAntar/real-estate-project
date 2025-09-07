@@ -455,8 +455,9 @@ export default function ContactPage() {
             Ready to Start Your <span className="text-blue-400">Property Journey?</span>
           </h2>
           <p className="text-xl text-gray-300 mb-8">
-            Don't wait any longer. Contact us today and let's find your perfect home together.
+            Don&apos;t wait any longer. Contact us today and let&apos;s find your perfect home together.
           </p>
+
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
