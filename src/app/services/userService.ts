@@ -108,14 +108,35 @@ export const deleteListing = async (id: string) => {
   return res.data;
 };
 
+// ----------------------
+// Image Upload (Updated for Vercel Blob)
+// ----------------------
 
-
-
-// Upload Image
+// Upload Single Image
 export const uploadImage = async (formData: FormData) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
+
+  const res = await api.post("/listings/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
+};
+
+// Upload Multiple Images (New function for better handling)
+export const uploadImages = async (files: File[]): Promise<{ urls: string[] }> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+  const token = await user.getIdToken();
+
+  const formData = new FormData();
+  files.forEach(file => {
+    formData.append("images", file);
+  });
 
   const res = await api.post("/listings/upload", formData, {
     headers: {
@@ -148,7 +169,7 @@ export function transformFormToListing(
 }
 
 // ----------------------
-// Listings
+// Listings Fetch Functions
 // ----------------------
 
 // 🔹 User: get listings by specific userId (Firestore query)
@@ -178,11 +199,10 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
     if (listingData.ownerId) {
       const userDoc = await getDoc(doc(db, "users", listingData.ownerId));
       if (userDoc.exists()) {
-      const userData = userDoc.data();
-      userName = userData?.fullName || "Unnamed";
-      userEmail = userData?.email || "";
+        const userData = userDoc.data();
+        userName = userData?.fullName || "Unnamed";
+        userEmail = userData?.email || "";
       }
-
     }
 
     listings.push({
@@ -194,4 +214,30 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
   }
 
   return listings;
+}
+
+// ----------------------
+// Helper Functions for Image Management
+// ----------------------
+
+// Delete image from Vercel Blob (if needed)
+export const deleteImage = async (imageUrl: string) => {
+  // Extract the blob filename from URL
+  // Vercel Blob URLs typically look like: https://xyz.public.blob.vercel-storage.com/filename
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+  const token = await user.getIdToken();
+
+  try {
+    // You might want to create a separate API endpoint for deleting images
+    // For now, this is a placeholder - Vercel Blob deletion needs to be handled server-side
+    console.log("Image deletion requested for:", imageUrl);
+    // await api.delete("/listings/image", { 
+    //   data: { imageUrl },
+    //   headers: { Authorization: `Bearer ${token}` }
+    // });
+  } catch (error) {
+    console.error("Failed to delete image:", error);
+    throw error;
+  }
 };
