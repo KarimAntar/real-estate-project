@@ -8,11 +8,12 @@ import {
   addListing,
   updateListing,
   getListingsByUser,
+  getAllListingsWithUsers,
   uploadImage,
   transformFormToListing,
 } from "../../services/userService";
 import { toast } from "react-toastify";
-import { ListingFormData } from "@/types/listing";
+import { Listing, ListingFormData } from "@/types/listing";
 import { useAuth } from "@contexts/AuthContext";
 import { useParams } from "next/navigation";
 
@@ -58,7 +59,7 @@ useEffect(() => {
         listings = await getAllListingsWithUsers();
       } else {
         // 🔹 Regular user: only their own listings
-        listings = await getUserListings(user.uid);
+        listings = await getListingsByUser(user.uid);
       }
 
       const listing = listings.find((l) => l.id === listingId);

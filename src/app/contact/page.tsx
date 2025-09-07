@@ -1,3 +1,5 @@
+// Contact Page
+
 "use client";
 
 import { useState } from "react";
@@ -127,9 +129,10 @@ export default function ContactPage() {
             Get In <span className="text-blue-400">Touch</span>
           </h1>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-            Have questions about our properties or services? We're here to help! 
-            Reach out to our expert team and let's find your perfect home together.
+            Have questions about our properties or services? We&apos;re here to help! 
+            Reach out to our expert team and let&apos;s find your perfect home together.
           </p>
+
         </div>
       </section>
 
@@ -454,6 +457,7 @@ export default function ContactPage() {
           <p className="text-xl text-gray-300 mb-8">
             Don't wait any longer. Contact us today and let's find your perfect home together.
           </p>
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="tel:+15551234567"

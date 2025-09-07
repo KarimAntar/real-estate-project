@@ -1,3 +1,5 @@
+// Home Page
+
 "use client";
 import Image from "next/image";
 import Link from "next/link";
@@ -308,7 +310,7 @@ export default function HomePage() {
             ].map((t, i) => (
               <div key={i} className="bg-gray-900 rounded-2xl p-8 shadow-md text-center hover:bg-gray-700 transition-all duration-300 hover:scale-105">
                 <div className="text-3xl text-blue-400 mb-4">❝</div>
-                <p className="text-gray-300 italic mb-6 text-lg">"{t.text}"</p>
+                <p className="text-gray-300 italic mb-6 text-lg">&quot;{t.text}&quot;</p>
                 <h4 className="font-semibold text-white text-lg">- {t.name}</h4>
               </div>
             ))}

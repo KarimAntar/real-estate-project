@@ -1,3 +1,5 @@
+// About Page
+
 "use client";
 
 import Image from "next/image";
@@ -81,7 +83,7 @@ export default function AboutPage() {
             About <span className="text-blue-400">Our Story</span>
           </h1>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-            We're not just a real estate platform – we're your trusted partners in finding the perfect home. 
+            We&apos;re not just a real estate platform – we&apos;re your trusted partners in finding the perfect home. 
             Our mission is to make property discovery and transactions seamless, transparent, and rewarding.
           </p>
         </div>
@@ -120,10 +122,10 @@ export default function AboutPage() {
                 <p className="text-lg leading-relaxed">
                   We started as a small team of real estate enthusiasts who were frustrated with the 
                   traditional property search process. Too many platforms were cluttered, outdated, 
-                  and didn't prioritize user experience.
+                  and didn&apos;t prioritize user experience.
                 </p>
                 <p className="text-lg leading-relaxed">
-                  Today, we've grown into a trusted platform that connects thousands of buyers, sellers, 
+                  Today, we&apos;ve grown into a trusted platform that connects thousands of buyers, sellers, 
                   and renters with their perfect properties. Our technology-driven approach combined with 
                   personal touch has revolutionized how people discover and secure their dream homes.
                 </p>
@@ -217,10 +219,11 @@ export default function AboutPage() {
             Our <span className="text-blue-400">Mission</span>
           </h2>
           <p className="text-xl text-gray-300 leading-relaxed mb-8">
-            "To empower every individual and family to find their perfect home through innovative technology, 
+            &quot;To empower every individual and family to find their perfect home through innovative technology, 
             exceptional service, and unwavering commitment to their success. We believe that everyone deserves 
-            a place they can truly call home."
+            a place they can truly call home.&quot;
           </p>
+
           <div className="bg-gray-800/50 rounded-2xl p-8 backdrop-blur-sm">
             <h3 className="text-2xl font-semibold mb-4">Why Choose Us?</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
