@@ -173,7 +173,8 @@ export default function ContactPage() {
                 <div className="text-center py-12">
                   <div className="text-green-400 text-6xl mb-4">✓</div>
                   <h3 className="text-2xl font-bold mb-2 text-green-400">Message Sent!</h3>
-                  <p className="text-gray-300">Thank you for contacting us. We'll get back to you soon.</p>
+                  <p className="text-gray-300">Thank you for contacting us. We&apos;ll get back to you soon.</p>
+
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
