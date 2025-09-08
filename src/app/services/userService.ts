@@ -4,7 +4,7 @@ import { Listing, ListingFormData } from "@/types/listing";
 import { auth, db, storage } from "@/app/firebase/firebaseConfig";
 import { v4 as uuidv4 } from "uuid";
 import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable, StorageReference } from "firebase/storage";
 
 // Axios instance
 const api = axios.create({
@@ -114,7 +114,11 @@ export const deleteListing = async (id: string) => {
 // ----------------------
 
 // Upload Single Image using client-side Firebase Storage
-export const uploadImageDirect = async (file: File): Promise<string> => {
+// src/app/services/userService.ts - Updated uploadImageDirect function
+export const uploadImageDirect = async (
+  file: File, 
+  onProgress?: (progress: number) => void
+): Promise<string> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
@@ -138,21 +142,40 @@ export const uploadImageDirect = async (file: File): Promise<string> => {
   const storageRef = ref(storage, fileName);
 
   try {
-    // Upload file
-    const snapshot = await uploadBytes(storageRef, file);
-    
-    // Get download URL
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    
-    return downloadURL;
+    // Use uploadBytesResumable for progress tracking
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    return new Promise<string>((resolve, reject) => {
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          onProgress?.(Math.round(progress));
+        }, 
+        (error) => {
+          console.error('Upload error:', error);
+          reject(new Error('Failed to upload image'));
+        }, 
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
+          } catch (error) {
+            reject(new Error('Failed to get download URL'));
+          }
+        }
+      );
+    });
   } catch (error) {
     console.error('Upload error:', error);
     throw new Error('Failed to upload image');
   }
 };
 
-// Upload Multiple Images using client-side Firebase Storage
-export const uploadImagesDirect = async (files: File[]): Promise<string[]> => {
+// Updated multiple images upload
+export const uploadImagesDirect = async (
+  files: File[],
+  onProgress?: (fileIndex: number, progress: number) => void
+): Promise<string[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
@@ -160,7 +183,9 @@ export const uploadImagesDirect = async (files: File[]): Promise<string[]> => {
     throw new Error("Maximum 10 files allowed per upload");
   }
 
-  const uploadPromises = files.map((file, index) => uploadImageDirect(file));
+  const uploadPromises = files.map((file, index) => 
+    uploadImageDirect(file, (progress) => onProgress?.(index, progress))
+  );
   
   try {
     const urls = await Promise.all(uploadPromises);
@@ -169,21 +194,6 @@ export const uploadImagesDirect = async (files: File[]): Promise<string[]> => {
     console.error('Multiple upload error:', error);
     throw error;
   }
-};
-
-// Upload Image via API (Server-side)
-export const uploadImage = async (formData: FormData) => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
-  const token = await user.getIdToken();
-
-  const res = await api.post("listings/upload", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return res.data;
 };
 
 // Upload Multiple Images via API (Server-side)
@@ -322,3 +332,5 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
 
   return listings;
 }
+
+// Removed local uploadBytesResumable implementation because we use the one from firebase/storage.

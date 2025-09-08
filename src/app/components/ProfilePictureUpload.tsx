@@ -2,23 +2,11 @@
 "use client";
 
 import { useState, useRef } from "react";
-import Image from "next/image";
 import { toast } from "react-toastify";
-import { 
-  FaCamera, 
-  FaTrash, 
-  FaSpinner, 
-  FaGoogle, 
-  FaUser,
-  FaUpload 
-} from "react-icons/fa";
+import { FaCamera, FaTrash, FaSpinner, FaGoogle, FaUser, FaUpload } from "react-icons/fa";
 import { useAuth } from "../contexts/AuthContext";
-import { 
-  uploadProfilePicture, 
-  deleteProfilePicture, 
-  importGoogleProfilePhoto,
-  getUserProfilePicture 
-} from "../services/profileService";
+import { storage } from "../firebase/firebaseConfig";
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import ProfileImage from "./ProfileImage";
 
 interface ProfilePictureUploadProps {
@@ -36,16 +24,10 @@ export default function ProfilePictureUpload({
 }: ProfilePictureUploadProps) {
   const { user, updateUserProfile } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [hovering, setHovering] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sizeClasses = {
-    sm: "w-16 h-16",
-    md: "w-24 h-24", 
-    lg: "w-32 h-32"
-  };
-
-  // Map size prop to actual pixel size for inline style
   const sizeMap: Record<"sm" | "md" | "lg", number> = {
     sm: 64,
     md: 96,
@@ -61,33 +43,112 @@ export default function ProfilePictureUpload({
   };
 
   const handleUpload = async (file: File) => {
-    if (!user) return;
+    if (!user) {
+      toast.error("Please log in to upload a profile picture");
+      return;
+    }
+
+    // Validate file
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(`Unsupported file type. Please use JPEG, PNG, or WebP.`);
+      return;
+    }
+
+    if (file.size > maxSize) {
+      toast.error(`File size must be less than 2MB`);
+      return;
+    }
 
     setUploading(true);
+    setUploadProgress(0);
+
     try {
-      // Delete old custom profile picture if exists
+      // Delete old profile picture if exists
       if (user.profilePicture) {
-        await deleteProfilePicture(user.profilePicture);
+        await deleteOldProfilePicture(user.profilePicture);
       }
 
-      // Upload new profile picture
-      const newProfileUrl = await uploadProfilePicture(file);
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileName = `profiles/${user.uid}/profile-${timestamp}.${file.type.split('/')[1]}`;
       
-      // Update user profile
-      await updateUserProfile({ 
-        profilePicture: newProfileUrl 
+      // Create storage reference
+      const storageRef = ref(storage, fileName);
+
+      // Create upload task with progress tracking
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      // Promise to handle upload completion
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on('state_changed', 
+          (snapshot) => {
+            // Progress tracking
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(Math.round(progress));
+            console.log('Upload progress:', progress);
+          }, 
+          (error) => {
+            console.error('Upload error:', error);
+            reject(error);
+          }, 
+          async () => {
+            try {
+              // Get download URL
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              
+              // Update user profile
+              await updateUserProfile({ 
+                profilePicture: downloadURL 
+              });
+
+              toast.success("Profile picture updated successfully!");
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          }
+        );
       });
 
-      toast.success("Profile picture updated successfully!");
     } catch (error: any) {
       console.error("Upload error:", error);
       toast.error(error.message || "Failed to upload profile picture");
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const deleteOldProfilePicture = async (imageUrl: string) => {
+    try {
+      if (!imageUrl.includes('firebasestorage.googleapis.com') && 
+          !imageUrl.includes('storage.googleapis.com')) {
+        return; // External URL, can't delete
+      }
+
+      let filePath = '';
+      
+      if (imageUrl.includes('firebasestorage.googleapis.com')) {
+        const urlParts = imageUrl.split('/o/')[1];
+        if (urlParts) {
+          filePath = decodeURIComponent(urlParts.split('?')[0]);
+        }
+      }
+
+      if (filePath && filePath.startsWith(`profiles/${user?.uid}/`)) {
+        const fileRef = ref(storage, filePath);
+        await deleteObject(fileRef);
+        console.log('Old profile picture deleted');
+      }
+    } catch (error) {
+      console.warn('Failed to delete old profile picture:', error);
     }
   };
 
@@ -98,26 +159,37 @@ export default function ProfilePictureUpload({
     }
 
     setUploading(true);
+    setUploadProgress(0);
+
     try {
-      // Delete old custom profile picture if exists
+      // Delete old profile picture if exists
       if (user.profilePicture) {
-        await deleteProfilePicture(user.profilePicture);
+        await deleteOldProfilePicture(user.profilePicture);
       }
 
-      // Import Google photo to Firebase Storage
-      const newProfileUrl = await importGoogleProfilePhoto(user.googlePhotoURL);
-      
-      // Update user profile
-      await updateUserProfile({ 
-        profilePicture: newProfileUrl 
-      });
+      // Fetch Google photo
+      let photoUrl = user.googlePhotoURL;
+      if (photoUrl.includes('googleusercontent.com')) {
+        photoUrl = photoUrl.replace(/=s\d+-c/, '=s400-c');
+        if (!photoUrl.includes('=s')) {
+          photoUrl = `${photoUrl}=s400-c`;
+        }
+      }
 
-      toast.success("Google profile photo imported successfully!");
+      const response = await fetch(photoUrl);
+      if (!response.ok) throw new Error('Failed to fetch Google photo');
+
+      const blob = await response.blob();
+      const file = new File([blob], 'google-profile.jpg', { type: 'image/jpeg' });
+
+      // Upload the file
+      await handleUpload(file);
+
     } catch (error: any) {
       console.error("Import error:", error);
       toast.error(error.message || "Failed to import Google photo");
-    } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -128,10 +200,8 @@ export default function ProfilePictureUpload({
 
     setUploading(true);
     try {
-      // Delete from Firebase Storage
-      await deleteProfilePicture(user.profilePicture);
+      await deleteOldProfilePicture(user.profilePicture);
       
-      // Update user profile
       await updateUserProfile({ 
         profilePicture: "" 
       });
@@ -145,7 +215,6 @@ export default function ProfilePictureUpload({
     }
   };
 
-  const currentProfilePicture = getUserProfilePicture(user);
   const hasCustomPicture = user?.profilePicture;
   const hasGooglePhoto = user?.googlePhotoURL && user.signInMethod === 'google.com';
 
@@ -168,29 +237,37 @@ export default function ProfilePictureUpload({
         {/* Upload Overlay */}
         {showUploadButton && (hovering || uploading) && (
           <div 
-            className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center cursor-pointer transition-opacity rounded-full"
-            onClick={() => fileInputRef.current?.click()}
+            className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center cursor-pointer transition-opacity rounded-full"
+            onClick={() => !uploading && fileInputRef.current?.click()}
           >
             {uploading ? (
-              <FaSpinner className="text-white text-xl animate-spin" />
+              <>
+                <FaSpinner className="text-white text-xl animate-spin mb-1" />
+                <span className="text-white text-xs">{uploadProgress}%</span>
+              </>
             ) : (
               <FaCamera className="text-white text-xl" />
             )}
           </div>
         )}
-
-        {/* Loading Spinner */}
-        {uploading && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-full">
-            <FaSpinner className="text-white text-xl animate-spin" />
-          </div>
-        )}
       </div>
+
+      {/* Progress Bar */}
+      {uploading && uploadProgress > 0 && (
+        <div className="w-full max-w-xs">
+          <div className="bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 text-center mt-1">{uploadProgress}% uploaded</p>
+        </div>
+      )}
 
       {/* Action Buttons */}
       {showUploadButton && (
         <div className="flex flex-wrap gap-2 justify-center">
-          {/* Upload Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
@@ -200,7 +277,6 @@ export default function ProfilePictureUpload({
             Upload
           </button>
 
-          {/* Import from Google Button */}
           {showImportButton && hasGooglePhoto && !hasCustomPicture && (
             <button
               onClick={handleImportFromGoogle}
@@ -212,7 +288,6 @@ export default function ProfilePictureUpload({
             </button>
           )}
 
-          {/* Remove Button */}
           {hasCustomPicture && (
             <button
               onClick={handleRemove}
@@ -225,26 +300,6 @@ export default function ProfilePictureUpload({
           )}
         </div>
       )}
-
-      {/* Photo Source Indicator */}
-      <div className="text-xs text-gray-400 text-center">
-        {hasCustomPicture ? (
-          <span className="flex items-center gap-1">
-            <FaUpload className="w-3 h-3" />
-            Custom Upload
-          </span>
-        ) : hasGooglePhoto ? (
-          <span className="flex items-center gap-1">
-            <FaGoogle className="w-3 h-3" />
-            Google Photo
-          </span>
-        ) : (
-          <span className="flex items-center gap-1">
-            <FaUser className="w-3 h-3" />
-            Default Avatar
-          </span>
-        )}
-      </div>
 
       {/* Hidden File Input */}
       <input

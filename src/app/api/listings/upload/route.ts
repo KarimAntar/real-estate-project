@@ -2,107 +2,72 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth } from "firebase-admin/auth";
-import { getStorage } from "firebase-admin/storage";
-import { db } from "@/app/firebase/firebaseAdmin";
-import { bucket } from "@/app/firebase/firebaseAdmin";
-
+import { bucket } from "@/app/firebase/firebaseAdmin"; // Ensure firebaseAdmin is correctly initialized
 
 export const POST = async (request: NextRequest) => {
+  console.log("[UPLOAD API] Received a request."); // 1. Check if the API is even hit
+
   try {
-    // Verify authentication
     const token = request.headers.get("authorization")?.split(" ")[1];
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      console.error("[UPLOAD API] Error: No authorization token provided.");
+      return NextResponse.json({ error: "Unauthorized: No token." }, { status: 401 });
     }
 
     const decoded = await getAuth().verifyIdToken(token);
     if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      console.error("[UPLOAD API] Error: Invalid token.");
+      return NextResponse.json({ error: "Invalid token." }, { status: 401 });
     }
+    console.log(`[UPLOAD API] Token verified for user: ${decoded.uid}`); // 2. Check if auth passes
 
     const data = await request.formData();
-    
-    // Handle both single file and multiple files
-    const files = data.getAll("file") as File[];
-    const images = data.getAll("images") as File[]; // Support for multiple images field
-    
-    const allFiles = [...files, ...images].filter(file => file instanceof File);
+    const allFiles = (data.getAll("file") as File[]).concat(data.getAll("images") as File[]).filter(f => f instanceof File);
 
     if (allFiles.length === 0) {
-      return NextResponse.json({ error: "No files provided" }, { status: 400 });
+      console.error("[UPLOAD API] Error: No files were found in the form data.");
+      return NextResponse.json({ error: "No files provided." }, { status: 400 });
     }
+    console.log(`[UPLOAD API] Found ${allFiles.length} file(s) to process.`); // 3. Check if files are found
 
-    // Validate files
-    const maxSize = 5 * 1024 * 1024; // 5MB per file
-    const maxFiles = 10; // Maximum 10 files per upload
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-
-    if (allFiles.length > maxFiles) {
-      return NextResponse.json({ 
-        error: `Maximum ${maxFiles} files allowed per upload` 
-      }, { status: 400 });
-    }
-
+    // --- File Validation (Simplified for clarity) ---
     for (const file of allFiles) {
-      if (!allowedTypes.includes(file.type)) {
-        return NextResponse.json({ 
-          error: `File ${file.name} has unsupported format. Allowed: JPEG, PNG, WebP, GIF` 
-        }, { status: 400 });
-      }
-      
-      if (file.size > maxSize) {
-        return NextResponse.json({ 
-          error: `File ${file.name} exceeds 5MB limit` 
-        }, { status: 400 });
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        console.error(`[UPLOAD API] Error: File ${file.name} is too large.`);
+        return NextResponse.json({ error: `File ${file.name} exceeds 5MB limit.` }, { status: 400 });
       }
     }
 
-    // Get Firebase Storage bucket
-    //const bucket = getStorage().bucket();
     const uploadPromises = allFiles.map(async (file, index) => {
-      // Generate unique filename with user folder organization
-      const timestamp = Date.now();
-      const fileName = `listings/${decoded.uid}/${timestamp}-${index}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
-      // Convert File to Buffer
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      
-      // Create file in Firebase Storage
+      const fileName = `listings/${decoded.uid}/${Date.now()}-${index}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      console.log(`[UPLOAD API] Preparing to upload: ${fileName}`); // 4. Check each file
+
+      const buffer = Buffer.from(await file.arrayBuffer());
       const fileRef = bucket.file(fileName);
       
-      // Upload file
-      await fileRef.save(buffer, {
-        metadata: {
-          contentType: file.type,
-          metadata: {
-            uploadedBy: decoded.uid,
-            uploadedAt: new Date().toISOString(),
-            originalName: file.name,
-          }
-        }
-      });
+      console.log(`[UPLOAD API] Starting upload for ${fileName}...`);
+      await fileRef.save(buffer, { metadata: { contentType: file.type } });
+      console.log(`[UPLOAD API] Successfully saved ${fileName} to bucket.`); // 5. Check if save completes
 
-      // Make file publicly accessible
+      console.log(`[UPLOAD API] Making ${fileName} public...`);
       await fileRef.makePublic();
+      console.log(`[UPLOAD API] Successfully made ${fileName} public.`); // 6. Check if makePublic completes
 
-      // Get public URL
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-      
-      return publicUrl;
+      return fileRef.publicUrl();
     });
 
     const urls = await Promise.all(uploadPromises);
+    console.log("[UPLOAD API] All uploads completed successfully."); // 7. Check if all promises resolve
 
-    return NextResponse.json({ 
-      urls,
-      message: `${urls.length} file(s) uploaded successfully`
-    });
+    return NextResponse.json({ urls, message: `${urls.length} file(s) uploaded successfully` });
 
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('[UPLOAD API] CRITICAL ERROR:', error); // 8. This will catch any error
+    
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
     return NextResponse.json({ 
-      error: "Failed to upload file(s)" 
+      error: "Failed to upload file(s).",
+      details: errorMessage
     }, { status: 500 });
   }
 };
