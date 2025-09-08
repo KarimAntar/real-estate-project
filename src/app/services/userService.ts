@@ -177,7 +177,7 @@ export const uploadImage = async (formData: FormData) => {
   if (!user) throw new Error("User not authenticated");
   const token = await user.getIdToken();
 
-  const res = await api.post("/listings/upload", formData, {
+  const res = await api.post("listings/upload", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
       Authorization: `Bearer ${token}`,
@@ -197,7 +197,7 @@ export const uploadImages = async (files: File[]): Promise<{ urls: string[] }> =
     formData.append("images", file);
   });
 
-  const res = await api.post("/listings/upload", formData, {
+  const res = await api.post("listings/upload", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
       Authorization: `Bearer ${token}`,
