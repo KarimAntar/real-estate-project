@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, PlusCircle, User, Building2, LogOut } from "lucide-react";
+import { Home, PlusCircle, User, Building2, LogOut, Users } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const sidebarItems = [
@@ -15,7 +15,7 @@ const sidebarItems = [
 
 export default function Sidebar() {
   const pathname = usePathname() ?? ""; // ✅ null-safe
-  const { logout } = useAuth();
+  const { user, logout } = useAuth(); // ✅ access user for role check
 
   return (
     <aside className="w-64 bg-gray-900 text-gray-200 flex flex-col border-r border-gray-800">
@@ -55,6 +55,21 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* ✅ Admin-only link */}
+        {user?.role === "admin" && (
+          <Link
+            href="/dashboard/users"
+            className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+              pathname.startsWith("/dashboard/users")
+                ? "bg-blue-600 text-white"
+                : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            <span className="font-medium">Manage Users</span>
+          </Link>
+        )}
       </nav>
 
       {/* Footer */}

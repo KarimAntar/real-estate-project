@@ -2,103 +2,170 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DashboardLayout from "@components/dashboard/DashboardLayout";
 import ProtectedRoute from "@components/dashboard/ProtectedRoute";
 import { useAuth } from "@contexts/AuthContext";
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import { db } from "@/app/firebase/firebaseConfig";
 import { toast } from "react-toastify";
-import { getAllUsers, updateUser, suspendUser } from "@services/userService";
+import Link from "next/link";
 
-export default function UsersPage() {
+interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  suspended?: boolean;
+}
+
+export default function ManageUsersPage() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "users"));
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as User[];
+        setUsers(data);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to fetch users");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (user?.role === "admin") {
-      loadUsers();
+      fetchUsers();
     }
   }, [user]);
 
-  const loadUsers = async () => {
+  const updateUser = async (id: string, updates: Partial<User>) => {
     try {
-      const allUsers = await getAllUsers();
-      setUsers(allUsers);
-    } catch (err: any) {
-      toast.error("Failed to load users");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async (id: string, updates: any) => {
-    try {
-      await updateUser(id, updates);
+      const userRef = doc(db, "users", id);
+      await updateDoc(userRef, updates);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
+      );
       toast.success("User updated successfully");
-      loadUsers();
-    } catch (err: any) {
-      toast.error("Update failed");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update user");
     }
   };
 
-  const handleSuspend = async (id: string, suspend: boolean) => {
-    try {
-      await suspendUser(id, suspend);
-      toast.success(suspend ? "User suspended" : "User reactivated");
-      loadUsers();
-    } catch (err: any) {
-      toast.error("Action failed");
-    }
-  };
+  const filteredUsers = users.filter(
+    (u) =>
+      u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
+  );
 
-  if (loading) return <p className="text-gray-600">Loading users...</p>;
-  if (user?.role !== "admin") return <p className="text-red-500">Access denied</p>;
+  if (user?.role !== "admin") {
+    return (
+      <DashboardLayout>
+        <div className="text-center text-red-500 font-semibold p-6">
+          Access Denied – Admins Only
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <ProtectedRoute>
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-800">Manage Users</h1>
-        <table className="min-w-full border border-gray-300 bg-white rounded-lg">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="p-3 text-left">Name</th>
-              <th className="p-3 text-left">Email</th>
-              <th className="p-3 text-left">Role</th>
-              <th className="p-3 text-left">Status</th>
-              <th className="p-3 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-t">
-                <td className="p-3">{u.name}</td>
-                <td className="p-3">{u.email}</td>
-                <td className="p-3">
-                  <select
-                    value={u.role}
-                    onChange={(e) => handleUpdate(u.id, { role: e.target.value })}
-                    className="border rounded px-2 py-1"
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </td>
-                <td className="p-3">{u.suspended ? "Suspended" : "Active"}</td>
-                <td className="p-3 space-x-2">
-                  <button
-                    onClick={() => handleSuspend(u.id, !u.suspended)}
-                    className={`px-3 py-1 rounded ${
-                      u.suspended
-                        ? "bg-green-600 hover:bg-green-700 text-white"
-                        : "bg-red-600 hover:bg-red-700 text-white"
-                    }`}
-                  >
-                    {u.suspended ? "Activate" : "Suspend"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DashboardLayout>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold text-white mb-6">Manage Users</h1>
+
+          {/* Search Bar */}
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full p-3 rounded-lg bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {loading ? (
+            <p className="text-gray-400">Loading users...</p>
+          ) : (
+            <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
+              <table className="w-full text-sm text-left text-gray-300">
+                <thead className="bg-gray-700 text-gray-200 uppercase text-xs">
+                  <tr>
+                    <th className="px-6 py-3">Name</th>
+                    <th className="px-6 py-3">Email</th>
+                    <th className="px-6 py-3">Role</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="border-t border-gray-700 hover:bg-gray-700/50"
+                    >
+                      <td className="px-6 py-4">{u.fullName}</td>
+                      <td className="px-6 py-4">{u.email}</td>
+                      <td className="px-6 py-4">{u.role}</td>
+                      <td className="px-6 py-4">
+                        {u.suspended ? (
+                          <span className="text-red-400 font-medium">
+                            Suspended
+                          </span>
+                        ) : (
+                          <span className="text-green-400 font-medium">
+                            Active
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right space-x-2">
+                        {/* Edit User Button */}
+                        <Link
+                          href={`/dashboard/profile/${u.id}`}
+                          className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-700 text-white text-xs"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() =>
+                            updateUser(u.id, {
+                              role: u.role === "admin" ? "user" : "admin",
+                            })
+                          }
+                          className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                        >
+                          {u.role === "admin" ? "Demote" : "Promote"}
+                        </button>
+                        <button
+                          onClick={() =>
+                            updateUser(u.id, { suspended: !u.suspended })
+                          }
+                          className={`px-3 py-1 rounded text-xs ${
+                            u.suspended
+                              ? "bg-green-600 hover:bg-green-700"
+                              : "bg-red-600 hover:bg-red-700"
+                          } text-white`}
+                        >
+                          {u.suspended ? "Unsuspend" : "Suspend"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }
