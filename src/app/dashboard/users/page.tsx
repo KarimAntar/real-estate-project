@@ -10,6 +10,13 @@ import { db } from "@/app/firebase/firebaseConfig";
 import { toast } from "react-toastify";
 import Link from "next/link";
 
+// Spinner component
+const Spinner = () => (
+  <div className="flex justify-center py-6">
+    <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent border-solid rounded-full animate-spin"></div>
+  </div>
+);
+
 interface User {
   id: string;
   fullName: string;
@@ -19,9 +26,9 @@ interface User {
 }
 
 export default function ManageUsersPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(true);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -37,7 +44,7 @@ export default function ManageUsersPage() {
         console.error(err);
         toast.error("Failed to fetch users");
       } finally {
-        setLoading(false);
+        setFetching(false);
       }
     };
 
@@ -66,18 +73,42 @@ export default function ManageUsersPage() {
       u.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (user?.role !== "admin") {
+  // ⏳ Don’t show anything until auth finishes loading
+  if (loading) {
     return (
       <DashboardLayout>
-        <div className="text-center text-red-500 font-semibold p-6">
-          Access Denied – Admins Only
+        <Spinner />
+      </DashboardLayout>
+    );
+  }
+
+  // 🚫 Handle non-admin users *after* auth is ready
+  if (!user || user.role !== "admin") {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md">
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">
+              Access Restricted
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              You don’t have permission to view this page. Only administrators
+              can access it.
+            </p>
+            <Link
+              href="/dashboard"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+            >
+              Return to Dashboard
+            </Link>
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin>
       <DashboardLayout>
         <div className="p-6">
           <h1 className="text-2xl font-bold text-white mb-6">Manage Users</h1>
@@ -93,8 +124,8 @@ export default function ManageUsersPage() {
             />
           </div>
 
-          {loading ? (
-            <p className="text-gray-400">Loading users...</p>
+          {fetching ? (
+            <Spinner />
           ) : (
             <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
               <table className="w-full text-sm text-left text-gray-300">
@@ -128,7 +159,6 @@ export default function ManageUsersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
-                        {/* Edit User Button */}
                         <Link
                           href={`/dashboard/profile/${u.id}`}
                           className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-700 text-white text-xs"

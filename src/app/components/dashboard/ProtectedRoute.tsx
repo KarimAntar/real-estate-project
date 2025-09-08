@@ -9,13 +9,15 @@ import { toast } from "react-toastify";
 interface ProtectedRouteProps {
   children: ReactNode;
   requireVerifiedEmail?: boolean;
+  requireAdmin?: boolean; // ✅ added
 }
 
 export default function ProtectedRoute({
   children,
   requireVerifiedEmail = false,
+  requireAdmin = false, // ✅ added
 }: ProtectedRouteProps) {
-  const { user, loading, sendVerificationEmail } = useAuth(); // ✅ use loading
+  const { user, loading, sendVerificationEmail } = useAuth();
   const router = useRouter();
 
   // Redirect if not logged in after Firebase finishes initializing
@@ -50,6 +52,29 @@ export default function ProtectedRoute({
         >
           Resend Verification Email
         </button>
+      </div>
+    );
+  }
+
+  // Handle admin-only access
+  if (requireAdmin && user.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="bg-white shadow-lg rounded-xl p-10 text-center max-w-md">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            Access Restricted
+          </h1>
+          <p className="text-gray-600 mb-6">
+            You don’t have permission to view this page. <br />
+            Only administrators can access it.
+          </p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
