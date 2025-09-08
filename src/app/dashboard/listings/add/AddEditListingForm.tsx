@@ -1,29 +1,36 @@
 // src/app/dashboard/listings/add/AddEditListingForm.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { useAuth } from "@/app/contexts/AuthContext";
 import ListingImageUpload from "@/app/components/ListingImageUpload";
-import { addListing, uploadImagesDirect } from "@/app/services/userService";
+import { addListing, updateListing, uploadImagesDirect } from "@/app/services/userService";
 import { Listing, ListingFormData } from "@/types/listing";
 import { v4 as uuidv4 } from "uuid";
 import { FaSave, FaSpinner, FaHome, FaBuilding, FaWarehouse, FaCity } from "react-icons/fa";
 
-const propertyTypes = [
+type PropertyType = "Home" | "Villa" | "Apartment" | "Commercial";
+
+const propertyTypes: { value: PropertyType; label: string; icon: React.ElementType }[] = [
   { value: "Home", label: "House", icon: FaHome },
   { value: "Villa", label: "Villa", icon: FaBuilding },
   { value: "Apartment", label: "Apartment", icon: FaCity },
   { value: "Commercial", label: "Commercial", icon: FaWarehouse },
 ];
 
-export default function AddListingForm() {
+interface AddEditListingFormProps {
+  initialData?: ListingFormData;
+  listingId?: string;
+}
+
+export default function AddEditListingForm({ initialData, listingId }: AddEditListingFormProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
-  
+
   const [formData, setFormData] = useState<ListingFormData>({
     title: "",
     description: "",
@@ -37,15 +44,23 @@ export default function AddListingForm() {
     newImages: [],
   });
 
+  // 🔹 Hydrate form with initialData (if editing)
+  useEffect(() => {
+    if (initialData) {
+      setFormData(initialData);
+    }
+  }, [initialData]);
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === "bedrooms" || name === "bathrooms" || name === "area" 
-        ? parseInt(value) || 0 
-        : value,
+      [name]:
+        name === "bedrooms" || name === "bathrooms" || name === "area"
+          ? parseInt(value) || 0
+          : value,
     }));
   };
 
@@ -86,9 +101,9 @@ export default function AddListingForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) {
-      toast.error("You must be logged in to create a listing");
+      toast.error("You must be logged in to save a listing");
       return;
     }
 
@@ -109,35 +124,55 @@ export default function AddListingForm() {
         imageUrls = [...imageUrls, ...uploadedUrls];
       }
 
-      // Create the listing object
-      const listingData: Listing = {
-        id: uuidv4(),
-        userId: user.uid,
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        city: formData.city.trim(),
-        price: parseFloat(formData.price),
-        type: formData.type,
-        bedrooms: formData.bedrooms,
-        bathrooms: formData.bathrooms,
-        area: formData.area,
-        images: imageUrls,
-        ownerId: user.uid,
-      };
+      if (listingId) {
+        // 🔹 Update existing listing
+        const updatedListing: Listing = {
+          id: listingId,
+          userId: user.uid,
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          city: formData.city.trim(),
+          price: parseFloat(formData.price),
+          type: formData.type,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          area: formData.area,
+          images: imageUrls,
+          ownerId: user.uid,
+          updatedAt: new Date().toISOString(),
+        };
 
-      console.log("Submitting listing data:", listingData);
+        await updateListing(listingId, updatedListing);
+        toast.success("Listing updated successfully!");
+      } else {
+        // 🔹 Create new listing
+        const newListing: Listing = {
+          id: uuidv4(),
+          userId: user.uid,
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          city: formData.city.trim(),
+          price: parseFloat(formData.price),
+          type: formData.type,
+          bedrooms: formData.bedrooms,
+          bathrooms: formData.bathrooms,
+          area: formData.area,
+          images: imageUrls,
+          ownerId: user.uid,
+          createdAt: new Date().toISOString(),
+        };
 
-      // Save to database
-      toast.info("Saving listing...");
-      const result = await addListing(listingData);
-      
-      console.log("Listing saved successfully:", result);
+        await addListing(newListing);
+        toast.success("Listing created successfully!");
+      }
 
-      toast.success("Listing created successfully!");
+      // ✅ Reset new images after save
+      setFormData(prev => ({ ...prev, newImages: [] }));
+
       router.push("/dashboard/listings");
     } catch (error: any) {
-      console.error("Failed to create listing:", error);
-      toast.error(error.message || "Failed to create listing");
+      console.error("Failed to save listing:", error);
+      toast.error(error.message || "Failed to save listing");
     } finally {
       setLoading(false);
       setUploadProgress({});
@@ -145,21 +180,28 @@ export default function AddListingForm() {
   };
 
   const hasNewImages = formData.newImages.length > 0;
-  const uploadProgressAvg = hasNewImages 
-    ? Math.round(Object.values(uploadProgress).reduce((a, b) => a + b, 0) / Object.keys(uploadProgress).length)
-    : 0;
+  const uploadProgressAvg =
+    hasNewImages && Object.keys(uploadProgress).length > 0
+      ? Math.round(
+          Object.values(uploadProgress).reduce((a, b) => a + b, 0) /
+            Object.keys(uploadProgress).length
+        )
+      : 0;
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg shadow-lg">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-2">Add New Listing</h1>
-        <p className="text-gray-400">Create a new property listing</p>
+        <h1 className="text-2xl font-bold text-white mb-2">
+          {listingId ? "Edit Listing" : "Add New Listing"}
+        </h1>
+        <p className="text-gray-400">
+          {listingId ? "Update your property listing" : "Create a new property listing"}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
+        {/* Title + City */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Property Title *
@@ -175,8 +217,6 @@ export default function AddListingForm() {
               disabled={loading}
             />
           </div>
-
-          {/* City */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               City *
@@ -211,9 +251,8 @@ export default function AddListingForm() {
           />
         </div>
 
-        {/* Property Details */}
+        {/* Price / Bedrooms / Bathrooms / Area */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Price */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Price ($) *
@@ -231,8 +270,6 @@ export default function AddListingForm() {
               disabled={loading}
             />
           </div>
-
-          {/* Bedrooms */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Bedrooms
@@ -247,8 +284,6 @@ export default function AddListingForm() {
               disabled={loading}
             />
           </div>
-
-          {/* Bathrooms */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Bathrooms
@@ -263,8 +298,6 @@ export default function AddListingForm() {
               disabled={loading}
             />
           </div>
-
-          {/* Area */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Area (sq ft)
@@ -292,7 +325,7 @@ export default function AddListingForm() {
               <button
                 key={value}
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, type: value as any }))}
+                onClick={() => setFormData(prev => ({ ...prev, type: value }))}
                 className={`p-4 rounded-lg border-2 transition-all ${
                   formData.type === value
                     ? "border-blue-500 bg-blue-500/20 text-blue-300"
@@ -331,8 +364,16 @@ export default function AddListingForm() {
           </div>
         )}
 
-        {/* Submit Button */}
-        <div className="flex justify-end pt-6">
+        {/* Submit + Cancel */}
+        <div className="flex justify-end pt-6 gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard/listings")}
+            className="px-6 py-3 rounded-lg bg-gray-600 hover:bg-gray-700 text-white"
+            disabled={loading}
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={loading}
@@ -350,7 +391,7 @@ export default function AddListingForm() {
             ) : (
               <>
                 <FaSave className="w-5 h-5" />
-                Create Listing
+                {listingId ? "Update Listing" : "Create Listing"}
               </>
             )}
           </button>

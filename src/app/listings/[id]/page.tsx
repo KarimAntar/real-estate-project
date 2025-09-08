@@ -1,3 +1,5 @@
+// src/app/listings/[id].tsx
+
 "use client";
 
 import { useParams } from "next/navigation";
@@ -79,6 +81,7 @@ export default function PropertyDetails() {
           bathrooms: data.bathrooms || 0,
           area: data.area || 0,
           images: Array.isArray(data.images) ? data.images : [],
+          userId: data.userId || data.ownerId || "unknown",
           ownerId: data.ownerId || data.userId || "",
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
@@ -104,6 +107,7 @@ export default function PropertyDetails() {
               bathrooms: data.bathrooms || 0,
               area: data.area || 0,
               images: Array.isArray(data.images) ? data.images : [],
+              userId: data.userId || data.ownerId || "unknown",
               ownerId: data.ownerId || data.userId || "",
               createdAt: data.createdAt,
               updatedAt: data.updatedAt,
