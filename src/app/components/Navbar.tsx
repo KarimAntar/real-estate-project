@@ -332,6 +332,18 @@ export default function Navbar() {
                         My Listings
                       </Link>
 
+                      {/* Admin-only link */}
+                      {user.role === "admin" && (
+                        <Link
+                          href="/dashboard/users"
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors text-blue-400"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          <User className="w-4 h-4" />
+                          Manage Users
+                        </Link>
+                      )}
+
                       <Link
                         href="/dashboard/settings"
                         className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors"
@@ -354,6 +366,7 @@ export default function Navbar() {
                         Sign Out
                       </button>
                     </div>
+
                   </div>
                 )}
               </div>

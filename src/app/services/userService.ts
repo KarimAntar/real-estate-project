@@ -3,7 +3,7 @@ import axios from "axios";
 import { Listing, ListingFormData } from "@/types/listing";
 import { auth, db, storage } from "@/app/firebase/firebaseConfig";
 import { v4 as uuidv4 } from "uuid";
-import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, query, where, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable, StorageReference } from "firebase/storage";
 
 // Axios instance
@@ -391,3 +391,18 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
 
   return listings;
 }
+
+export const getAllUsers = async () => {
+  const querySnapshot = await getDocs(collection(db, "users"));
+  return querySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+};
+
+export const updateUser = async (id: string, updates: any) => {
+  const userRef = doc(db, "users", id);
+  await updateDoc(userRef, updates);
+};
+
+export const suspendUser = async (id: string, suspend: boolean) => {
+  const userRef = doc(db, "users", id);
+  await updateDoc(userRef, { suspended: suspend });
+};
