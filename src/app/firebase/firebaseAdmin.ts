@@ -4,27 +4,36 @@ import { getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
-const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
 const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-
-if (!serviceAccountString) {
-  throw new Error("The FIREBASE_SERVICE_ACCOUNT environment variable is not set. The API cannot start.");
-}
-
-if (!storageBucket) {
-  throw new Error("The NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET environment variable is not set.");
-}
 
 if (!getApps().length) {
   try {
-    const serviceAccount = JSON.parse(serviceAccountString.replace(/\\n/g, "\n"));
+    // Check for the individual environment variables
+    if (
+      !process.env.FIREBASE_PROJECT_ID ||
+      !process.env.FIREBASE_CLIENT_EMAIL ||
+      !process.env.FIREBASE_PRIVATE_KEY ||
+      !storageBucket
+    ) {
+      throw new Error(
+        "Missing required Firebase Admin environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY, STORAGE_BUCKET)."
+      );
+    }
+
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // The replace call is important to handle the newlines in the private key
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
       storageBucket: storageBucket,
     });
   } catch (error) {
     console.error("Firebase Admin Initialization Error:", error);
-    throw new Error("Failed to initialize Firebase Admin SDK. Check your FIREBASE_SERVICE_ACCOUNT format.");
+    throw new Error(
+      "Failed to initialize Firebase Admin SDK. Check your environment variables."
+    );
   }
 }
 

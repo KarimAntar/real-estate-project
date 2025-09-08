@@ -136,6 +136,35 @@ export const deleteListing = async (id: string) => {
   }
 };
 
+// --- NEW FUNCTION: Get a single listing by its document ID ---
+export const getListingById = async (docId: string): Promise<Listing | null> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+
+  const docRef = doc(db, "listings", docId);
+  const docSnap = await getDoc(docRef);
+
+  if (!docSnap.exists()) {
+    console.error("No such listing document!");
+    return null;
+  }
+
+  const listingData = docSnap.data() as Listing;
+
+  // Security check: Ensure the current user owns this listing or is an admin
+  const userDocSnap = await getDoc(doc(db, "users", user.uid));
+  const userRole = userDocSnap.exists() ? userDocSnap.data()?.role : 'user';
+
+  if (listingData.ownerId !== user.uid && userRole !== 'admin') {
+    throw new Error("You do not have permission to edit this listing.");
+  }
+
+  return {
+    ...listingData,
+    docId: docSnap.id,
+    id: listingData.id || docSnap.id, // Ensure both ID properties are present
+  };
+};
 // ----------------------
 // Firebase Storage Image Upload (Client-side)
 // ----------------------
@@ -287,15 +316,22 @@ export const deleteImage = async (imageUrl: string) => {
 };
 
 
+// --- UPDATED FUNCTION ---
 // Transform form -> Listing
 export function transformFormToListing(
   form: ListingFormData,
   id?: string,
   imageUrls: string[] = []
 ): Listing {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("User must be authenticated to create a listing.");
+  }
+
   return {
     id: id || uuidv4(), // always ensure unique ID
-    ownerId: auth.currentUser?.uid || "",
+    userId: currentUser.uid, // ✅ FIX: Add the required userId
+    ownerId: currentUser.uid, // Also keep ownerId for consistency
     title: form.title,
     description: form.description,
     price: Number(form.price),

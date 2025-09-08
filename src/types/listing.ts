@@ -13,11 +13,12 @@ export interface Listing {
   city: string;
   type: "Home" | "Villa" | "Apartment" | "Commercial";
   images: string[];
-  ownerId: string;             // User who owns this listing
+  userId: string;             // User who owns this listing (for compatibility)
+  ownerId?: string;            // The primary field for ownership
   userName?: string;           // Fetched from users collection (optional)
   userEmail?: string;          // Optional (for fallback or debugging)
-  createdAt?: string;          // ✅ Added timestamp fields
-  updatedAt?: string;          // ✅ Added timestamp fields
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // What the form gives you
@@ -35,10 +36,10 @@ export interface ListingFormData {
   docId?: string;           // Firestore document ID for editing
 }
 
-// ✅ The payload you send to DB
+// The payload you send to DB
 export type ListingPayload = Omit<ListingFormData, "newImages" | "existingImages" | "price"> & {
   price: number;
   images: string[];
-  createdAt?: string;         // ✅ Added timestamp fields
-  updatedAt?: string;         // ✅ Added timestamp fields
+  createdAt?: string;
+  updatedAt?: string;
 };

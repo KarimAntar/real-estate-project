@@ -1,4 +1,4 @@
-// src/app/dashboard/listings/add/page.tsx or wherever your listing form is
+// src/app/dashboard/listings/add/AddEditListingForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -112,6 +112,7 @@ export default function AddListingForm() {
       // Create the listing object
       const listingData: Listing = {
         id: uuidv4(),
+        userId: user.uid,
         title: formData.title.trim(),
         description: formData.description.trim(),
         city: formData.city.trim(),

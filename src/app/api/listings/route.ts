@@ -15,21 +15,22 @@ interface Listing {
   area?: number;
   images?: string[];
   userId?: string;
-  ownerId?: string; // Add this for compatibility
+  ownerId?: string;
   [key: string]: any;
 }
 
 // Helper: get user data & role
 const getUserData = async (uid: string) => {
-  try {
-    const userDoc = await db.collection("users").doc(uid).get();
-    if (!userDoc.exists) return { role: "user" };
-    return userDoc.data() as { role?: string };
-  } catch (error) {
-    console.error("Error getting user data:", error);
-    return { role: "user" };
-  }
+    try {
+        const userDoc = await db.collection("users").doc(uid).get();
+        if (!userDoc.exists) return { role: "user" };
+        return userDoc.data() as { role?: string };
+    } catch (error) {
+        console.error("Error getting user data:", error);
+        return { role: "user" };
+    }
 };
+
 
 // GET all listings
 export async function GET(req: NextRequest) {
@@ -46,26 +47,17 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const isAdminQuery = url.searchParams.get("admin") === "true";
 
-    let snapshot;
+    let querySnapshot;
     if (isAdmin && isAdminQuery) {
-      snapshot = await db.collection("listings").get(); // all listings
+      querySnapshot = await db.collection("listings").get(); // all listings
     } else {
-      // Get listings where either userId or ownerId matches (for backward compatibility)
-      snapshot = await db.collection("listings")
-        .where("userId", "==", userId)
-        .get();
-      
-      // Also check for ownerId if no results with userId
-      if (snapshot.empty) {
-        snapshot = await db.collection("listings")
-          .where("ownerId", "==", userId)
-          .get();
-      }
+      // Query for listings where 'ownerId' matches the user's ID
+      querySnapshot = await db.collection("listings").where("ownerId", "==", userId).get();
     }
 
-    const listings = snapshot.docs.map(doc => ({ 
+    const listings = querySnapshot.docs.map(doc => ({ 
       id: doc.id, 
-      docId: doc.id, // Add docId for frontend compatibility
+      docId: doc.id,
       ...(doc.data() as Listing) 
     }));
     
@@ -76,6 +68,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
 
 // POST create new listing
 export async function POST(req: NextRequest) {
@@ -131,18 +124,20 @@ export async function POST(req: NextRequest) {
 
     console.log("Listing created successfully:", docRef.id);
 
-    // FIX: The spread of `finalListingData` already includes the `id`.
-    // We just need to add `docId` for consistency with the GET response.
     return NextResponse.json({ 
       docId: docRef.id,
       ...finalListingData 
     });
   } catch (err: unknown) {
-    console.error("POST listings error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ 
+    console.error("POST listings error:", err); // Log the full error object
+
+    const errorDetails = err instanceof Error 
+      ? { message: err.message, stack: err.stack } 
+      : { message: "Unknown error", details: err };
+
+    return NextResponse.json({
       error: "Failed to create listing",
-      details: message 
+      details: errorDetails
     }, { status: 500 });
   }
 }

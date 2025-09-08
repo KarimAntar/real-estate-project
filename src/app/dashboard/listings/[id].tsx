@@ -1,3 +1,4 @@
+// src/app/dashboard/listings/[id].tsx
 "use client";
 
 import DashboardLayout from "../../components/dashboard/DashboardLayout";
@@ -9,7 +10,7 @@ import {
   updateListing,
   getListingsByUser,
   getAllListingsWithUsers,
-  uploadImage,
+  uploadImages,
   transformFormToListing,
 } from "../../services/userService";
 import { toast } from "react-toastify";
@@ -119,7 +120,7 @@ useEffect(() => {
     }));
   };
 
-  // Submit handler
+    // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -128,9 +129,8 @@ useEffect(() => {
       // Upload new images first
       let uploadedImageUrls: string[] = [];
       if (form.newImages.length > 0) {
-        const formData = new FormData();
-        form.newImages.forEach((file) => formData.append("images", file));
-        const uploadRes = await uploadImage(formData);
+        // Note: Ensure you are using the correct upload function name
+        const uploadRes = await uploadImages(form.newImages);
         uploadedImageUrls = uploadRes.urls || [];
       }
 
@@ -138,21 +138,12 @@ useEffect(() => {
       const allImages = [...form.existingImages, ...uploadedImageUrls];
 
       if (listingId) {
-        // Update listing
-        await updateListing(listingId, {
-          title: form.title,
-          description: form.description,
-          city: form.city,
-          price: Number(form.price),
-          type: form.type,
-          bedrooms: form.bedrooms,
-          bathrooms: form.bathrooms,
-          area: form.area,
-          images: allImages,
-        });
+        // FIX: Use the helper function to create the listing object
+        const listingData = transformFormToListing(form, listingId, allImages);
+        await updateListing(listingId, listingData);
         toast.success("Listing updated successfully!");
       } else {
-        // Add new listing
+        // Add new listing (this part was already correct)
         const newListing = transformFormToListing(form, "", allImages);
         await addListing(newListing);
         toast.success("Listing added successfully!");
