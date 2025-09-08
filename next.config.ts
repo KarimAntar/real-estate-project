@@ -5,7 +5,8 @@ const nextConfig = {
     domains: [
       'images.unsplash.com',
       'plus.unsplash.com',
-      'cdn-icons-png.flaticon.com', // add this to allow premium images
+      'cdn-icons-png.flaticon.com',
+      'ui-avatars.com', // add this to allow premium images
     ],
   },
     typescript: {

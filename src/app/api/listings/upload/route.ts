@@ -1,6 +1,11 @@
+// src/app/api/listings/upload/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
-import { put } from '@vercel/blob';
 import { getAuth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
+import { db } from "@/app/firebase/firebaseAdmin";
+import { bucket } from "@/app/firebase/firebaseAdmin";
+
 
 export const POST = async (request: NextRequest) => {
   try {
@@ -30,6 +35,7 @@ export const POST = async (request: NextRequest) => {
     // Validate files
     const maxSize = 5 * 1024 * 1024; // 5MB per file
     const maxFiles = 10; // Maximum 10 files per upload
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
     if (allFiles.length > maxFiles) {
       return NextResponse.json({ 
@@ -38,9 +44,9 @@ export const POST = async (request: NextRequest) => {
     }
 
     for (const file of allFiles) {
-      if (!file.type.startsWith('image/')) {
+      if (!allowedTypes.includes(file.type)) {
         return NextResponse.json({ 
-          error: `File ${file.name} is not an image` 
+          error: `File ${file.name} has unsupported format. Allowed: JPEG, PNG, WebP, GIF` 
         }, { status: 400 });
       }
       
@@ -51,15 +57,39 @@ export const POST = async (request: NextRequest) => {
       }
     }
 
-    // Upload all files to Vercel Blob
+    // Get Firebase Storage bucket
+    //const bucket = getStorage().bucket();
     const uploadPromises = allFiles.map(async (file, index) => {
-      const fileName = `listings/${decoded.uid}/${Date.now()}-${index}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      // Generate unique filename with user folder organization
+      const timestamp = Date.now();
+      const fileName = `listings/${decoded.uid}/${timestamp}-${index}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       
-      const blob = await put(fileName, file, {
-        access: 'public',
+      // Convert File to Buffer
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      // Create file in Firebase Storage
+      const fileRef = bucket.file(fileName);
+      
+      // Upload file
+      await fileRef.save(buffer, {
+        metadata: {
+          contentType: file.type,
+          metadata: {
+            uploadedBy: decoded.uid,
+            uploadedAt: new Date().toISOString(),
+            originalName: file.name,
+          }
+        }
       });
+
+      // Make file publicly accessible
+      await fileRef.makePublic();
+
+      // Get public URL
+      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
       
-      return blob.url;
+      return publicUrl;
     });
 
     const urls = await Promise.all(uploadPromises);

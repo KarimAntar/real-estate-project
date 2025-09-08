@@ -1,9 +1,10 @@
 // src/app/services/userService.ts
 import axios from "axios";
 import { Listing, ListingFormData } from "@/types/listing";
-import { auth, db } from "@/app/firebase/firebaseConfig";
+import { auth, db, storage } from "@/app/firebase/firebaseConfig";
 import { v4 as uuidv4 } from "uuid";
 import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 // Axios instance
 const api = axios.create({
@@ -109,10 +110,68 @@ export const deleteListing = async (id: string) => {
 };
 
 // ----------------------
-// Image Upload (Updated for Vercel Blob)
+// Firebase Storage Image Upload (Client-side)
 // ----------------------
 
-// Upload Single Image
+// Upload Single Image using client-side Firebase Storage
+export const uploadImageDirect = async (file: File): Promise<string> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+
+  // Validate file
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error(`Unsupported file type: ${file.type}`);
+  }
+
+  if (file.size > maxSize) {
+    throw new Error(`File size exceeds 5MB limit`);
+  }
+
+  // Generate unique filename
+  const timestamp = Date.now();
+  const fileName = `listings/${user.uid}/${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+
+  // Create storage reference
+  const storageRef = ref(storage, fileName);
+
+  try {
+    // Upload file
+    const snapshot = await uploadBytes(storageRef, file);
+    
+    // Get download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw new Error('Failed to upload image');
+  }
+};
+
+// Upload Multiple Images using client-side Firebase Storage
+export const uploadImagesDirect = async (files: File[]): Promise<string[]> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+
+  if (files.length > 10) {
+    throw new Error("Maximum 10 files allowed per upload");
+  }
+
+  const uploadPromises = files.map((file, index) => uploadImageDirect(file));
+  
+  try {
+    const urls = await Promise.all(uploadPromises);
+    return urls;
+  } catch (error) {
+    console.error('Multiple upload error:', error);
+    throw error;
+  }
+};
+
+// Upload Image via API (Server-side)
 export const uploadImage = async (formData: FormData) => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
@@ -127,7 +186,7 @@ export const uploadImage = async (formData: FormData) => {
   return res.data;
 };
 
-// Upload Multiple Images (New function for better handling)
+// Upload Multiple Images via API (Server-side)
 export const uploadImages = async (files: File[]): Promise<{ urls: string[] }> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
@@ -145,6 +204,54 @@ export const uploadImages = async (files: File[]): Promise<{ urls: string[] }> =
     },
   });
   return res.data;
+};
+
+// Delete image from Firebase Storage
+export const deleteImage = async (imageUrl: string) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("User not authenticated");
+
+  try {
+    // Extract file path from Firebase Storage URL
+    // Firebase Storage URLs look like: https://firebasestorage.googleapis.com/v0/b/bucket/o/path%2Fto%2Ffile?alt=media&token=...
+    // or: https://storage.googleapis.com/bucket/path/to/file
+    
+    let filePath = '';
+    
+    if (imageUrl.includes('firebasestorage.googleapis.com')) {
+      // Extract from Firebase Storage URL
+      const urlParts = imageUrl.split('/o/')[1];
+      if (urlParts) {
+        filePath = decodeURIComponent(urlParts.split('?')[0]);
+      }
+    } else if (imageUrl.includes('storage.googleapis.com')) {
+      // Extract from Google Cloud Storage URL
+      const urlParts = imageUrl.split(`storage.googleapis.com/`)[1];
+      if (urlParts) {
+        const pathParts = urlParts.split('/');
+        pathParts.shift(); // Remove bucket name
+        filePath = pathParts.join('/');
+      }
+    }
+
+    if (!filePath) {
+      throw new Error('Unable to parse image URL');
+    }
+
+    // Verify the file belongs to the current user
+    if (!filePath.startsWith(`listings/${user.uid}/`)) {
+      throw new Error('Unauthorized to delete this image');
+    }
+
+    // Delete from Firebase Storage
+    const fileRef = ref(storage, filePath);
+    await deleteObject(fileRef);
+
+    console.log('Image deleted successfully:', filePath);
+  } catch (error) {
+    console.error('Failed to delete image:', error);
+    throw error;
+  }
 };
 
 // Transform form -> Listing
@@ -215,29 +322,3 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
 
   return listings;
 }
-
-// ----------------------
-// Helper Functions for Image Management
-// ----------------------
-
-// Delete image from Vercel Blob (if needed)
-export const deleteImage = async (imageUrl: string) => {
-  // Extract the blob filename from URL
-  // Vercel Blob URLs typically look like: https://xyz.public.blob.vercel-storage.com/filename
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
-  const token = await user.getIdToken();
-
-  try {
-    // You might want to create a separate API endpoint for deleting images
-    // For now, this is a placeholder - Vercel Blob deletion needs to be handled server-side
-    console.log("Image deletion requested for:", imageUrl);
-    // await api.delete("/listings/image", { 
-    //   data: { imageUrl },
-    //   headers: { Authorization: `Bearer ${token}` }
-    // });
-  } catch (error) {
-    console.error("Failed to delete image:", error);
-    throw error;
-  }
-};

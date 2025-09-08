@@ -1,258 +1,197 @@
+// src/app/auth/login/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "react-toastify";
-import { LogIn } from "lucide-react";
 import Link from "next/link";
-import { auth, db } from "../../firebase/firebaseConfig";
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  fetchSignInMethodsForEmail,
-  signInWithEmailAndPassword,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-} from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { useAuth } from "../../contexts/AuthContext";
+import { toast } from "react-toastify";
+import { FaEye, FaEyeSlash, FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 
 export default function LoginPage() {
-  const { login, sendVerificationEmail } = useAuth();
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const { login, loginWithGoogle } = useAuth();
+  const router = useRouter();
 
-  const [showVerifyNotice, setShowVerifyNotice] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
-  // ❌ invalid credentials highlight
-  const [invalidFields, setInvalidFields] = useState<{ email: boolean; password: boolean }>({
-    email: false,
-    password: false,
-  });
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (cooldown > 0) {
-      timer = setTimeout(() => setCooldown((prev) => prev - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setInvalidFields({ email: false, password: false }); // reset before each try
 
     try {
-      await setPersistence(
-        auth,
-        rememberMe ? browserLocalPersistence : browserSessionPersistence
-      );
-
       await login(email, password);
-      toast.success("Login successful!");
+      toast.success("Welcome back!");
       router.push("/dashboard");
-    } catch (err: any) {
-      const message = err.message || "";
+    } catch (error: any) {
+      toast.error(error.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (message.toLowerCase().includes("verify your email")) {
-        toast.warning("Please verify your email before logging in.");
-        setShowVerifyNotice(true);
-        setCooldown(60);
-      } else if (
-        message.includes("auth/wrong-password") ||
-        message.includes("auth/user-not-found") ||
-        message.includes("auth/invalid-credential")
-      ) {
-        toast.error("Incorrect email or password.");
-        setInvalidFields({ email: true, password: true }); // highlight both
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+      toast.success("Welcome! Signed in with Google");
+      router.push("/dashboard");
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.warning("Sign-in cancelled");
+      } else if (error.code === 'auth/popup-blocked') {
+        toast.error("Popup blocked. Please allow popups and try again.");
       } else {
-        toast.error("Login failed. Please try again.");
+        toast.error(error.message || "Google sign-in failed");
       }
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    try {
-      await sendVerificationEmail();
-      toast.success("📧 Verification email resent!");
-      setCooldown(60);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to resend verification email.");
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const provider = new GoogleAuthProvider();
-
-    try {
-      await setPersistence(
-        auth,
-        rememberMe ? browserLocalPersistence : browserSessionPersistence
-      );
-
-      const result = await signInWithPopup(auth, provider);
-      const googleUser = result.user;
-      const googleEmail = googleUser.email;
-
-      if (!googleEmail) throw new Error("No email found in Google account.");
-
-      const methods = await fetchSignInMethodsForEmail(auth, googleEmail);
-
-      if (methods.includes("password")) {
-        const existingPassword = prompt(
-          `This email is already registered. Enter your password to sign in:`
-        );
-        if (!existingPassword) throw new Error("Password required to login.");
-
-        await signInWithEmailAndPassword(auth, googleEmail, existingPassword);
-        toast.success("✅ Signed in successfully with your registered account!");
-      }
-
-      // Save Google user if first login
-      const userDocRef = doc(db, "users", googleUser.uid);
-      const docSnap = await getDoc(userDocRef);
-      if (!docSnap.exists()) {
-        await setDoc(userDocRef, {
-          email: googleEmail,
-          fullName: googleUser.displayName || "",
-          role: "user",
-        });
-        toast.success("🎉 First-time Google login saved to database!");
-      }
-
-      router.push("/dashboard");
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Google sign-in failed.");
-    } finally {
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-20 p-6 bg-gray-800 rounded-md shadow-md space-y-6">
-      {showVerifyNotice && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded-lg text-center">
-          <h2 className="text-xl font-bold mb-2">Verify Your Email</h2>
-          <p className="mb-4">
-            Your email <strong>{email}</strong> is not verified. Please check your inbox (or spam
-            folder) and click the verification link.
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
+            Sign in to your account
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-400">
+            Or{" "}
+            <Link
+              href="/auth/register"
+              className="font-medium text-blue-400 hover:text-blue-300"
+            >
+              create a new account
+            </Link>
           </p>
-          <button
-            onClick={handleResendVerification}
-            disabled={cooldown > 0}
-            className={`bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded transition-colors ${
-              cooldown > 0 ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-            }`}
-          >
-            {cooldown > 0 ? `Resend available in ${cooldown}s` : "Resend Verification Email"}
-          </button>
-        </div>
-      )}
-
-      <h2 className="text-2xl font-bold mb-6">Login</h2>
-
-      {/* Google Sign-In */}
-      <button
-        onClick={handleGoogleSignIn}
-        className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2 rounded mb-4 hover:bg-gray-100 transition-colors"
-      >
-        {/* Google Logo */}
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-6 h-6">
-          <path
-            fill="#EA4335"
-            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-          />
-          <path
-            fill="#4285F4"
-            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-          />
-          <path
-            fill="#FBBC05"
-            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-          />
-          <path
-            fill="#34A853"
-            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-          />
-          <path fill="none" d="M0 0h48v48H0z" />
-        </svg>
-        Sign in with Google
-      </button>
-
-      <p className="text-center text-white font-bold my-2">OR</p>
-
-      {/* Email/Password Login Form */}
-      <form onSubmit={handleLogin} className="flex flex-col space-y-4">
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 ${
-            invalidFields.email
-              ? "border-2 border-red-500 focus:ring-red-500"
-              : "focus:ring-blue-500"
-          }`}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={`p-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 ${
-            invalidFields.password
-              ? "border-2 border-red-500 focus:ring-red-500"
-              : "focus:ring-blue-500"
-          }`}
-          required
-        />
-
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 accent-blue-500"
-            id="rememberMe"
-          />
-          <label htmlFor="rememberMe" className="text-gray-300 text-sm">
-            Remember me
-          </label>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={`flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors ${
-            loading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-          }`}
-        >
-          {loading ? "Logging in..." : <><LogIn size={18} /> Login</>}
-        </button>
+        <div className="bg-gray-800 rounded-lg shadow-lg p-8">
+          {/* Google Sign-in Button */}
+          <div className="mb-6">
+            <button
+              onClick={handleGoogleLogin}
+              disabled={googleLoading || loading}
+              className="group relative w-full flex justify-center py-3 px-4 border border-gray-600 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                {googleLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                ) : (
+                  <FaGoogle className="h-5 w-5" />
+                )}
+              </span>
+              {googleLoading ? "Signing in..." : "Continue with Google"}
+            </button>
+          </div>
 
-        <p className="text-center text-sm text-blue-400 hover:underline cursor-pointer">
-          <Link href="/auth/forgot-password">Forgot my password?</Link>
-        </p>
-      </form>
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-600"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-800 text-gray-400">Or continue with email</span>
+            </div>
+          </div>
 
-      <p className="text-center text-gray-300 mt-4">
-        Not a member?{" "}
-        <Link href="/auth/register" className="text-blue-400 hover:underline">
-          Register here
-        </Link>
-      </p>
+          {/* Email/Password Form */}
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="email" className="sr-only">
+                Email address
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
+                  <FaEnvelope className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-600 placeholder-gray-400 text-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-700"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center">
+                  <FaLock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  className="appearance-none relative block w-full pl-10 pr-12 py-3 border border-gray-600 placeholder-gray-400 text-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-700"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <FaEyeSlash className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                  ) : (
+                    <FaEye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <Link
+                  href="/auth/forgot-password"
+                  className="font-medium text-blue-400 hover:text-blue-300"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading || googleLoading}
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                ) : null}
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6">
+            <div className="text-center">
+              <span className="text-gray-400">Don't have an account? </span>
+              <Link
+                href="/auth/register"
+                className="font-medium text-blue-400 hover:text-blue-300"
+              >
+                Sign up here
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

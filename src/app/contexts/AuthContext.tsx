@@ -2,7 +2,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { auth, db } from "@/app/firebase/firebaseConfig"; // db = Firestore
+import { auth, db } from "@/app/firebase/firebaseConfig";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -11,24 +11,31 @@ import {
   sendEmailVerification,
   updateProfile,
   User,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 export interface AppUser {
   uid: string;
   email: string;
   fullName?: string;
   emailVerified?: boolean;
-  role: "user" | "admin"; // added role
+  role: "user" | "admin";
+  profilePicture?: string;
+  googlePhotoURL?: string;
+  signInMethod?: 'email' | 'google.com';
 }
 
 interface AuthContextProps {
   user: AppUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
+  updateUserProfile: (data: { fullName?: string; profilePicture?: string }) => Promise<void>;
   getIdToken: () => Promise<string | null>;
 }
 
@@ -44,22 +51,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return token;
   };
 
-  // 🔹 fetch role from Firestore
-  const fetchUserRole = async (uid: string) => {
+  // 🔹 fetch/create user data in Firestore
+  const fetchOrCreateUserData = async (firebaseUser: User) => {
     try {
-      const docRef = doc(db, "users", uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-          fullName: data.fullName || "",
-          role: data.role || "user",
+      const userDocRef = doc(db, "users", firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      let userData;
+      
+      if (userDoc.exists()) {
+        // User exists, get their data
+        userData = userDoc.data();
+      } else {
+        // New user, create their document
+        const providerData = firebaseUser.providerData[0];
+        const signInMethod = providerData?.providerId || 'email';
+        
+        userData = {
+          fullName: firebaseUser.displayName || "",
+          email: firebaseUser.email || "",
+          role: "user",
+          profilePicture: "", // Will be set later if needed
+          googlePhotoURL: signInMethod === 'google.com' ? firebaseUser.photoURL : "",
+          signInMethod: signInMethod === 'google.com' ? 'google.com' : 'email',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
+        
+        await setDoc(userDocRef, userData);
       }
-      return { fullName: "", role: "user" };
+
+      return {
+        fullName: userData.fullName || "",
+        role: userData.role || "user",
+        profilePicture: userData.profilePicture || "",
+        googlePhotoURL: userData.googlePhotoURL || "",
+        signInMethod: userData.signInMethod || 'email',
+      };
     } catch (err) {
-      console.error("Failed to fetch user role:", err);
-      return { fullName: "", role: "user" };
+      console.error("Failed to fetch/create user data:", err);
+      return { 
+        fullName: "", 
+        role: "user" as const,
+        profilePicture: "",
+        googlePhotoURL: "",
+        signInMethod: 'email' as const,
+      };
     }
   };
 
@@ -68,14 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         await fetchToken(firebaseUser);
 
-        const { fullName: dbFullName, role } = await fetchUserRole(firebaseUser.uid);
+        const userData = await fetchOrCreateUserData(firebaseUser);
 
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email || "",
-          fullName: firebaseUser.displayName || dbFullName,
+          fullName: userData.fullName,
           emailVerified: firebaseUser.emailVerified,
-          role,
+          role: userData.role,
+          profilePicture: userData.profilePicture,
+          googlePhotoURL: userData.googlePhotoURL,
+          signInMethod: userData.signInMethod,
         });
       } else {
         localStorage.removeItem("jwtToken");
@@ -96,15 +136,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await fetchToken(userCredential.user);
-
-    const { fullName: dbFullName, role } = await fetchUserRole(userCredential.user.uid);
+    const userData = await fetchOrCreateUserData(userCredential.user);
 
     setUser({
       uid: userCredential.user.uid,
       email: userCredential.user.email || "",
-      fullName: userCredential.user.displayName || dbFullName,
+      fullName: userData.fullName,
       emailVerified: userCredential.user.emailVerified,
-      role,
+      role: userData.role,
+      profilePicture: userData.profilePicture,
+      googlePhotoURL: userData.googlePhotoURL,
+      signInMethod: userData.signInMethod,
+    });
+  };
+
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+
+    const userCredential = await signInWithPopup(auth, provider);
+    await fetchToken(userCredential.user);
+    
+    const userData = await fetchOrCreateUserData(userCredential.user);
+
+    setUser({
+      uid: userCredential.user.uid,
+      email: userCredential.user.email || "",
+      fullName: userData.fullName,
+      emailVerified: userCredential.user.emailVerified,
+      role: userData.role,
+      profilePicture: userData.profilePicture,
+      googlePhotoURL: userData.googlePhotoURL,
+      signInMethod: userData.signInMethod,
     });
   };
 
@@ -117,14 +182,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await fetchToken(userCredential.user);
+    const userData = await fetchOrCreateUserData(userCredential.user);
 
-    // new user default role = "user"
     setUser({
       uid: userCredential.user.uid,
       email: userCredential.user.email || "",
-      fullName,
+      fullName: fullName,
       emailVerified: userCredential.user.emailVerified,
-      role: "user",
+      role: userData.role,
+      profilePicture: userData.profilePicture,
+      googlePhotoURL: userData.googlePhotoURL,
+      signInMethod: userData.signInMethod,
+    });
+  };
+
+  const updateUserProfile = async (data: { fullName?: string; profilePicture?: string }) => {
+    if (!user || !auth.currentUser) throw new Error("No user logged in");
+
+    // Update Firebase Auth profile
+    const profileUpdates: { displayName?: string; photoURL?: string } = {};
+    if (data.fullName !== undefined) profileUpdates.displayName = data.fullName;
+    if (data.profilePicture !== undefined) profileUpdates.photoURL = data.profilePicture;
+
+    if (Object.keys(profileUpdates).length > 0) {
+      await updateProfile(auth.currentUser, profileUpdates);
+    }
+
+    // Update Firestore document
+    const userDocRef = doc(db, "users", user.uid);
+    const firestoreUpdates = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await updateDoc(userDocRef, firestoreUpdates);
+
+    // Update local state
+    setUser({
+      ...user,
+      fullName: data.fullName !== undefined ? data.fullName : user.fullName,
+      profilePicture: data.profilePicture !== undefined ? data.profilePicture : user.profilePicture,
     });
   };
 
@@ -145,7 +242,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout, sendVerificationEmail, getIdToken }}
+      value={{ 
+        user, 
+        loading, 
+        login, 
+        loginWithGoogle,
+        register, 
+        logout, 
+        sendVerificationEmail, 
+        updateUserProfile,
+        getIdToken 
+      }}
     >
       {children}
     </AuthContext.Provider>

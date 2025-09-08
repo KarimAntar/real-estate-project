@@ -1,11 +1,13 @@
+// src/app/components/Navbar.tsx
 "use client";
 
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../contexts/AuthContext";
+import { getUserProfilePicture } from "../services/profileService";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
-import { Bell, LogOut, LogIn, UserPlus, House, List, Info, Mail } from "lucide-react";
+import { Bell, LogOut, LogIn, UserPlus, House, List, Info, Mail, User, ChevronDown } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
@@ -19,6 +21,7 @@ import {
   writeBatch,
   Timestamp,
 } from "firebase/firestore";
+import ProfileImage from "./ProfileImage";
 
 // Define notification type
 interface Notification {
@@ -33,9 +36,11 @@ export default function Navbar() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -59,11 +64,14 @@ export default function Navbar() {
     return () => unsubscribe();
   }, [user]);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -81,7 +89,15 @@ export default function Navbar() {
     }
   };
 
-  const toggleNotifications = () => setShowNotifications(!showNotifications);
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+    setShowUserMenu(false);
+  };
+
+  const toggleUserMenu = () => {
+    setShowUserMenu(!showUserMenu);
+    setShowNotifications(false);
+  };
 
   const markAsRead = async (notifId: string) => {
     if (!user) return;
@@ -128,6 +144,7 @@ export default function Navbar() {
   }
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const userProfilePicture = getUserProfilePicture(user);
 
   return (
     <nav className="bg-gray-900 p-4 shadow-lg relative z-10">
@@ -234,20 +251,90 @@ export default function Navbar() {
                 )}
               </div>
 
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition text-sm font-medium text-gray-200"
-              >
-                Dashboard
-              </Link>
+              {/* User Menu */}
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center gap-2 p-1 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition"
+                >
+                  <ProfileImage 
+                    user={user}
+                    size={32}
+                    className="border-2 border-gray-600"
+                  />
+                  <span className="text-sm font-medium text-gray-200 hidden sm:block">
+                    {user.fullName || 'User'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
 
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 p-2 rounded-lg bg-red-600 hover:bg-red-700 shadow-md hover:scale-105 transition text-sm font-medium"
-              >
-                <LogOut className="w-4 h-4 inline" />
-                Logout
-              </button>
+                {showUserMenu && (
+                  <div className="absolute right-0 top-12 bg-gray-800 text-gray-200 rounded-lg shadow-lg w-64 py-2 z-50">
+                    {/* User Info Header */}
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <ProfileImage 
+                          user={user}
+                          size={40}
+                          className="border-2 border-gray-600"
+                        />
+                        <div>
+                          <p className="font-medium">{user.fullName || 'User'}</p>
+                          <p className="text-sm text-gray-400">{user.email}</p>
+                          {user.role === 'admin' && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-2">
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <House className="w-4 h-4" />
+                        Dashboard
+                      </Link>
+                      
+                      <Link
+                        href="/dashboard/profile"
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <User className="w-4 h-4" />
+                        Profile
+                      </Link>
+
+                      <Link
+                        href="/dashboard/listings"
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <List className="w-4 h-4" />
+                        My Listings
+                      </Link>
+
+                      <hr className="my-2 border-gray-700" />
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          handleLogout();
+                        }}
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors w-full text-left text-red-400"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <>
