@@ -18,8 +18,8 @@ export default function ClientProviders({ children }: Props) {
       {/* Public site navbar */}
       <Navbar />
 
-      {/* Page content */}
-      <main>{children}</main>
+      {/* Page content with top padding to account for the navbar's height */}
+      <main className="pt-16">{children}</main>
 
       {/* Public site footer */}
       <Footer />
