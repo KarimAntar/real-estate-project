@@ -188,7 +188,7 @@ export default function ManageUsersPage() {
               Access Restricted
             </h1>
             <p className="text-gray-300 mb-6">
-              You don't have permission to view this page. Only administrators
+              You don&#39;t have permission to view this page. Only administrators
               can access user management.
             </p>
             <Link
