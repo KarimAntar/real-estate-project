@@ -1,7 +1,7 @@
 // src/app/components/ProfileImage.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { getUserProfilePicture, getInitials } from "../services/profileService";
 
@@ -20,6 +20,11 @@ export default function ProfileImage({
 }: ProfileImageProps) {
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Get the profile picture URL
   const profileUrl = getUserProfilePicture(user);
@@ -47,9 +52,9 @@ export default function ProfileImage({
   }
 
   // For external URLs that might cause issues with Next.js Image
-  const isExternalUrl = !profileUrl.startsWith('/') && 
+  const isExternalUrl = isClient && !profileUrl.startsWith('/') && 
                        !profileUrl.startsWith('data:') &&
-                       !profileUrl.includes(window?.location?.hostname || '');
+                       !profileUrl.includes(window.location.hostname);
 
   if (isExternalUrl) {
     return (
