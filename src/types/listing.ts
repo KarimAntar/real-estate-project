@@ -13,7 +13,7 @@ export interface Listing {
   city: string;
   type: "Home" | "Villa" | "Apartment" | "Commercial";
   images: string[];
-  userId: string;             // User who owns this listing
+  ownerId: string;             // User who owns this listing
   userName?: string;           // Fetched from users collection (optional)
   userEmail?: string;          // Optional (for fallback or debugging)
   createdAt?: string;          // ✅ Added timestamp fields

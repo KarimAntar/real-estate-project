@@ -1,6 +1,6 @@
 // src/app/api/listings/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/app/firebase/firebaseAdmin";
+import { db, storage } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
 
 interface ListingUpdate {
@@ -36,7 +36,7 @@ export async function PUT(
     }
 
     const listingData = listingSnap.data();
-    if (listingData?.userId !== userId) {
+    if (listingData?.userId !== userId && listingData?.ownerId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -71,8 +71,25 @@ export async function DELETE(
     if (!docSnap.exists) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
 
     const listingData = docSnap.data();
-    if (listingData?.userId !== userId) {
+    if (listingData?.userId !== userId && listingData?.ownerId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Delete associated images from Firebase Storage
+    if (listingData?.images && listingData.images.length > 0) {
+      const bucket = storage.bucket();
+      for (const imageUrl of listingData.images) {
+        try {
+          const url = new URL(imageUrl);
+          const pathName = url.pathname;
+          // Extract the file path after the bucket name
+          const filePath = pathName.substring(pathName.indexOf('/', 1) + 1);
+          const decodedFilePath = decodeURIComponent(filePath);
+          await bucket.file(decodedFilePath).delete();
+        } catch (error) {
+          console.warn(`Failed to delete image ${imageUrl}:`, error);
+        }
+      }
     }
 
     await docRef.delete();

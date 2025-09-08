@@ -15,14 +15,20 @@ interface Listing {
   area?: number;
   images?: string[];
   userId?: string;
+  ownerId?: string; // Add this for compatibility
   [key: string]: any;
 }
 
 // Helper: get user data & role
 const getUserData = async (uid: string) => {
-  const userDoc = await db.collection("users").doc(uid).get();
-  if (!userDoc.exists) return { role: "user" };
-  return userDoc.data() as { role?: string };
+  try {
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) return { role: "user" };
+    return userDoc.data() as { role?: string };
+  } catch (error) {
+    console.error("Error getting user data:", error);
+    return { role: "user" };
+  }
 };
 
 // GET all listings
@@ -44,68 +50,99 @@ export async function GET(req: NextRequest) {
     if (isAdmin && isAdminQuery) {
       snapshot = await db.collection("listings").get(); // all listings
     } else {
-      snapshot = await db.collection("listings").where("userId", "==", userId).get(); // only user's
+      // Get listings where either userId or ownerId matches (for backward compatibility)
+      snapshot = await db.collection("listings")
+        .where("userId", "==", userId)
+        .get();
+      
+      // Also check for ownerId if no results with userId
+      if (snapshot.empty) {
+        snapshot = await db.collection("listings")
+          .where("ownerId", "==", userId)
+          .get();
+      }
     }
 
-    const listings = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Listing) }));
+    const listings = snapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      docId: doc.id, // Add docId for frontend compatibility
+      ...(doc.data() as Listing) 
+    }));
+    
     return NextResponse.json(listings);
   } catch (err: unknown) {
+    console.error("GET listings error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-// POST create new listing (FIXED)
+// POST create new listing
 export async function POST(req: NextRequest) {
-  console.log("[LISTINGS API - POST] Received request to create listing.");
-
   try {
+    const body: Listing = await req.json();
     const token = req.headers.get("authorization")?.split(" ")[1];
-    if (!token) {
-      console.error("[LISTINGS API - POST] Error: No token provided.");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const decoded = await getAuth().verifyIdToken(token);
     const userId = decoded.uid;
-    console.log(`[LISTINGS API - POST] Token verified for userId: ${userId}`);
 
-    const body = await req.json();
-    console.log("[LISTINGS API - POST] Request body received:", body);
+    // Validate required fields
+    if (!body.title || !body.description || !body.price || !body.city) {
+      return NextResponse.json(
+        { error: "Missing required fields: title, description, price, city" }, 
+        { status: 400 }
+      );
+    }
 
-    // --- Data Validation and Cleanup ---
-    // This ensures no 'undefined' values are sent to Firestore, which would cause a crash.
+    // Convert price to number if it's a string
+    const price = typeof body.price === 'string' ? parseFloat(body.price) : body.price;
+    if (isNaN(price)) {
+      return NextResponse.json({ error: "Invalid price format" }, { status: 400 });
+    }
+
+    // Create the listing data
     const listingData = {
-      id: body.id || "", // Use the client-generated uuid
-      title: body.title || "",
-      description: body.description || "",
-      price: Number(body.price) || 0,
-      city: body.city || "",
+      title: body.title,
+      description: body.description,
+      price: price,
+      city: body.city,
       type: body.type || "Home",
       bedrooms: Number(body.bedrooms) || 0,
       bathrooms: Number(body.bathrooms) || 0,
       area: Number(body.area) || 0,
-      images: Array.isArray(body.images) ? body.images : [],
-      userId: userId, // Always use the server-verified userId for security
+      images: body.images || [],
+      userId: userId, // For backward compatibility
+      ownerId: userId, // Primary field for owner identification
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    console.log("[LISTINGS API - POST] Cleaned data to be saved:", listingData);
 
+    // Generate document ID
     const docRef = db.collection("listings").doc();
-    console.log(`[LISTINGS API - POST] Creating new document with ID: ${docRef.id}`);
+    
+    // Add the generated ID to the data
+    const finalListingData = {
+      ...listingData,
+      id: docRef.id, // Add document ID as 'id' field
+    };
 
-    await docRef.set(listingData);
-    console.log("[LISTINGS API - POST] Successfully wrote data to Firestore.");
+    await docRef.set(finalListingData);
 
-    // --- FIX: Return Response Correctly ---
-    // Spread the data first, then explicitly set the `id` to be the Firestore document ID.
-    // This resolves the "id is specified more than once" error.
-    return NextResponse.json({ ...listingData, id: docRef.id });
+    console.log("Listing created successfully:", docRef.id);
 
+    // FIX: The spread of `finalListingData` already includes the `id`.
+    // We just need to add `docId` for consistency with the GET response.
+    return NextResponse.json({ 
+      docId: docRef.id,
+      ...finalListingData 
+    });
   } catch (err: unknown) {
-    console.error("[LISTINGS API - POST] CRITICAL ERROR:", err);
-    const message = err instanceof Error ? err.message : "Unknown server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("POST listings error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ 
+      error: "Failed to create listing",
+      details: message 
+    }, { status: 500 });
   }
 }

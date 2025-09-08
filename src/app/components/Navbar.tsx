@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { getUserProfilePicture } from "../services/profileService";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
-import { Bell, LogOut, LogIn, UserPlus, House, List, Info, Mail, User, ChevronDown } from "lucide-react";
+import { Bell, LogOut, LogIn, UserPlus, House, List, Info, Mail, User, ChevronDown, Settings } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
@@ -251,20 +251,35 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* User Menu */}
+              {/* Profile Picture - Now in the header */}
+              <ProfileImage 
+                user={user}
+                size={40}
+                className="border-2 border-gray-600 hover:border-gray-400 transition-colors cursor-pointer"
+                alt="Profile Picture"
+              />
+
+              {/* User Info & Menu */}
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={toggleUserMenu}
-                  className="flex items-center gap-2 p-1 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition"
+                  className="flex items-center gap-2 p-2 rounded-lg bg-gray-800 hover:bg-gray-700 shadow-md hover:scale-105 transition"
                 >
-                  <ProfileImage 
-                    user={user}
-                    size={32}
-                    className="border-2 border-gray-600"
-                  />
-                  <span className="text-sm font-medium text-gray-200 hidden sm:block">
-                    {user.fullName || 'User'}
-                  </span>
+                  <div className="text-left hidden sm:block">
+                    <div className="text-sm font-medium text-gray-200">
+                      {user.fullName || 'User'}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {user.role === 'admin' && (
+                        <span className="text-purple-400 font-medium">Admin</span>
+                      )}
+                      {user.role !== 'admin' && (
+                        <span>
+                          {user.signInMethod === 'google.com' ? 'Google Account' : 'Email Account'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
 
@@ -272,20 +287,18 @@ export default function Navbar() {
                   <div className="absolute right-0 top-12 bg-gray-800 text-gray-200 rounded-lg shadow-lg w-64 py-2 z-50">
                     {/* User Info Header */}
                     <div className="px-4 py-3 border-b border-gray-700">
-                      <div className="flex items-center gap-3">
-                        <ProfileImage 
-                          user={user}
-                          size={40}
-                          className="border-2 border-gray-600"
-                        />
-                        <div>
-                          <p className="font-medium">{user.fullName || 'User'}</p>
-                          <p className="text-sm text-gray-400">{user.email}</p>
+                      <div className="text-left">
+                        <p className="font-medium">{user.fullName || 'User'}</p>
+                        <p className="text-sm text-gray-400">{user.email}</p>
+                        <div className="flex items-center gap-2 mt-1">
                           {user.role === 'admin' && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-900/30 text-purple-300 border border-purple-700">
                               Admin
                             </span>
                           )}
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-gray-300">
+                            {user.signInMethod === 'google.com' ? 'Google' : 'Email'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -317,6 +330,15 @@ export default function Navbar() {
                       >
                         <List className="w-4 h-4" />
                         My Listings
+                      </Link>
+
+                      <Link
+                        href="/dashboard/settings"
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
                       </Link>
 
                       <hr className="my-2 border-gray-700" />
