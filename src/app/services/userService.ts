@@ -272,7 +272,7 @@ export function transformFormToListing(
 ): Listing {
   return {
     id: id || uuidv4(), // always ensure unique ID
-    ownerId: auth.currentUser?.uid || "",
+    userId: auth.currentUser?.uid || "",
     title: form.title,
     description: form.description,
     price: Number(form.price),
@@ -291,7 +291,7 @@ export function transformFormToListing(
 
 // 🔹 User: get listings by specific userId (Firestore query)
 export const getListingsByUser = async (uid: string): Promise<Listing[]> => {
-  const q = query(collection(db, "listings"), where("ownerId", "==", uid));
+  const q = query(collection(db, "listings"), where("userId", "==", uid));
   const snapshot = await getDocs(q);
 
   return snapshot.docs.map((docSnap) => {
@@ -313,8 +313,8 @@ export async function getAllListingsWithUsers(): Promise<Listing[]> {
     let userName = "Unknown User";
     let userEmail = "";
 
-    if (listingData.ownerId) {
-      const userDoc = await getDoc(doc(db, "users", listingData.ownerId));
+    if (listingData.userId) {
+      const userDoc = await getDoc(doc(db, "users", listingData.userId));
       if (userDoc.exists()) {
         const userData = userDoc.data();
         userName = userData?.fullName || "Unnamed";

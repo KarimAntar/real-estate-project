@@ -149,7 +149,7 @@ const handleDelete = async (listing: Listing) => {
                   )}
 
                   {user &&
-                    (user.role === "admin" || listing.ownerId === user.uid) && (
+                    (user.role === "admin" || listing.userId === user.uid) && (
                       <div className="flex space-x-2 mt-4">
                         <button
                           className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow-md transition hover:scale-105"
