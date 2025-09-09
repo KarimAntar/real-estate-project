@@ -1,4 +1,3 @@
-// src/app/components/dashboard/DashboardLayout.tsx - Updated with notification bell
 "use client";
 
 import { ReactNode, useState } from "react";
@@ -6,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../contexts/AuthContext";
 import { toast } from "react-toastify";
-import NotificationBell from "../NotificationBell";
 import {
   FaHome,
   FaPlus,
@@ -177,9 +175,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div className="flex-1" />
 
-          {/* Notifications and user menu */}
+          {/* User menu */}
           <div className="flex items-center gap-4">
-            <NotificationBell />
             
             {/* User avatar - mobile */}
             <div className="lg:hidden">

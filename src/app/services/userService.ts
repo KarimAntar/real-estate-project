@@ -1,17 +1,20 @@
 // src/app/services/userService.ts
-import axios from "axios";
-import { Listing, ListingFormData } from "@/types/listing";
-import { auth, db, storage } from "@/app/firebase/firebaseConfig";
-import { v4 as uuidv4 } from "uuid";
-import { collection, getDocs, doc, getDoc, query, where, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable, StorageReference } from "firebase/storage";
+import { Listing } from "@/types/listing";
+import { db } from "@/app/firebase/firebaseConfig";
+import {
+  collection,
+  getDocs,
+  doc,
+  query,
+  where,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  getDoc,
+} from "firebase/firestore";
 import { ListingWithStatus } from "@/types/notification";
-import { deleteDoc, orderBy } from "firebase/firestore";
-
-// src/services/userService.ts - Updated with notification system
-
 import { getAuth } from "firebase/auth";
-import { createNotification } from "@/app/api/notifications/route";
+import { sendNotificationToUser } from "../services/notificationService";
 
 const API_BASE_URL = "/api";
 
@@ -22,11 +25,10 @@ const getAuthToken = async () => {
   return await user.getIdToken();
 };
 
-// Add listing (now creates as pending)
+// Add listing (creates as pending) + notify
 export const addListing = async (listingData: Listing): Promise<Listing> => {
   const token = await getAuthToken();
-  
-  // Add status as pending for all new listings
+
   const listingWithStatus = {
     ...listingData,
     status: "pending" as const,
@@ -35,7 +37,7 @@ export const addListing = async (listingData: Listing): Promise<Listing> => {
   const response = await fetch(`${API_BASE_URL}/listings`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(listingWithStatus),
@@ -46,29 +48,28 @@ export const addListing = async (listingData: Listing): Promise<Listing> => {
     throw new Error(errorData.error || "Failed to create listing");
   }
 
-  const result = await response.json();
-  
-  // Create notification for user about listing being under review
-  await createNotification({
-    userId: listingData.userId,
-    type: "listing_review",
-    title: "Listing Submitted for Review",
-    message: `Your listing "${listingData.title}" has been submitted and is now under review. We'll notify you once it's approved.`,
-    listingId: result.docId || result.id,
-  });
+  const newListing: Listing = await response.json();
 
-  return result;
+  // 🔔 Notify owner
+  if (listingData.ownerId || listingData.userId) {
+    await sendNotificationToUser(listingData.ownerId || listingData.userId, {
+      title: "Listing Submitted for Review",
+      message: `Your listing "${listingData.title}" has been submitted for review.`,
+      listingId: newListing.id || newListing.docId,
+    });
+  }
+
+  return newListing;
 };
 
-
-// Get approved listings for public view
+// Get approved listings (public)
 export const getApprovedListings = async (): Promise<Listing[]> => {
   const token = await getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/listings/public`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
   });
@@ -80,24 +81,36 @@ export const getApprovedListings = async (): Promise<Listing[]> => {
   return response.json();
 };
 
-// Update listing
-export const updateListing = async (listingId: string, updates: Partial<Listing>): Promise<Listing> => {
+// Update listing + notify
+export const updateListing = async (
+  listingId: string,
+  updates: Partial<Listing>
+): Promise<Listing> => {
   const token = await getAuthToken();
-  
-  // When updating, set status back to pending if content changed
-  const significantFields = ['title', 'description', 'price', 'city', 'type', 'bedrooms', 'bathrooms', 'area'];
-  const hasSignificantChanges = significantFields.some(field => field in updates);
-  
+
+  const significantFields = [
+    "title",
+    "description",
+    "price",
+    "city",
+    "type",
+    "bedrooms",
+    "bathrooms",
+    "area",
+  ];
+  const hasSignificantChanges = significantFields.some(
+    (field) => field in updates
+  );
+
   const updateData = {
     ...updates,
-    // Reset to pending if significant changes were made
     ...(hasSignificantChanges && { status: "pending" }),
   };
 
   const response = await fetch(`${API_BASE_URL}/listings/${listingId}`, {
     method: "PUT",
     headers: {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(updateData),
@@ -108,42 +121,39 @@ export const updateListing = async (listingId: string, updates: Partial<Listing>
     throw new Error(errorData.error || "Failed to update listing");
   }
 
-  const result = await response.json();
+  const updatedListing: Listing = await response.json();
 
-  // If significant changes were made, notify user about re-review
-  if (hasSignificantChanges) {
-    await createNotification({
-      userId: updates.userId || updates.ownerId!,
-      type: "listing_review",
-      title: "Listing Updated - Under Review",
-      message: `Your updated listing "${updates.title || 'listing'}" is now under review again due to significant changes.`,
+  // 🔔 Notify owner
+  const ownerId = updates.ownerId || updates.userId;
+  if (ownerId) {
+    await sendNotificationToUser(ownerId, {
+      title: "Listing Updated",
+      message: `Your listing "${updates.title || "Untitled"}" has been updated.`,
       listingId: listingId,
     });
   }
 
-  return result;
+  return updatedListing;
 };
 
-
-// Upload images directly
+// Upload images
 export const uploadImagesDirect = async (
   files: File[],
   onProgress?: (fileIndex: number, progress: number) => void
 ): Promise<string[]> => {
   const token = await getAuthToken();
-  
+
   const formData = new FormData();
-  files.forEach(file => {
+  files.forEach((file) => {
     formData.append("images", file);
   });
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    
+
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable && onProgress) {
         const progress = Math.round((e.loaded / e.total) * 100);
-        // Call progress for all files (simplified)
         files.forEach((_, index) => onProgress(index, progress));
       }
     });
@@ -168,11 +178,11 @@ export const uploadImagesDirect = async (
 // Delete image
 export const deleteImage = async (imageUrl: string): Promise<void> => {
   const token = await getAuthToken();
-  
+
   const response = await fetch(`${API_BASE_URL}/listings/image`, {
     method: "DELETE",
     headers: {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ imageUrl }),
@@ -184,9 +194,13 @@ export const deleteImage = async (imageUrl: string): Promise<void> => {
   }
 };
 
+// User management
 export const getAllUsers = async () => {
   const querySnapshot = await getDocs(collection(db, "users"));
-  return querySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  return querySnapshot.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...docSnap.data(),
+  }));
 };
 
 export const updateUser = async (id: string, updates: any) => {
@@ -199,24 +213,25 @@ export const suspendUser = async (id: string, suspend: boolean) => {
   await updateDoc(userRef, { suspended: suspend });
 };
 
-
-export const getListingsByUser = async (uid: string): Promise<ListingWithStatus[]> => {
+// Get listings by user
+export const getListingsByUser = async (
+  ownerId: string
+): Promise<ListingWithStatus[]> => {
   try {
     const q = query(
-      collection(db, "listings"), 
-      where("uid", "==", uid),
+      collection(db, "listings"),
+      where("ownerId", "==", ownerId),
       orderBy("createdAt", "desc")
     );
     const snapshot = await getDocs(q);
-    
-    const listings: ListingWithStatus[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      docId: doc.id,
-      ...doc.data(),
-      // Ensure status property exists, default to 'pending' if not present
-      status: doc.data().status || 'pending'
+
+    const listings: ListingWithStatus[] = snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      docId: docSnap.id,
+      ...docSnap.data(),
+      status: docSnap.data().status || "pending",
     })) as ListingWithStatus[];
-    
+
     return listings;
   } catch (error) {
     console.error("Error fetching user listings:", error);
@@ -224,23 +239,27 @@ export const getListingsByUser = async (uid: string): Promise<ListingWithStatus[
   }
 };
 
-export const getAllListingsWithUsers = async (): Promise<ListingWithStatus[]> => {
+// Get all listings (with user info)
+export const getAllListingsWithUsers = async (): Promise<
+  ListingWithStatus[]
+> => {
   try {
     const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
-    
+
     const listingsWithUsers: ListingWithStatus[] = [];
-    
+
     for (const docSnap of snapshot.docs) {
       const listingData = docSnap.data();
-      
-      // Get user data
+
       let userName = "Unknown User";
       let userEmail = "unknown@email.com";
-      
-      if (listingData.uid) {
+
+      if (listingData.ownerId || listingData.userId) {
         try {
-          const userDoc = await getDoc(doc(db, "users", listingData.uid));
+          const userDoc = await getDoc(
+            doc(db, "users", listingData.ownerId || listingData.userId)
+          );
           if (userDoc.exists()) {
             const userData = userDoc.data();
             userName = userData.fullName || "Unknown User";
@@ -250,18 +269,17 @@ export const getAllListingsWithUsers = async (): Promise<ListingWithStatus[]> =>
           console.error("Error fetching user data:", userError);
         }
       }
-      
+
       listingsWithUsers.push({
         id: docSnap.id,
         docId: docSnap.id,
         ...listingData,
         userName,
         userEmail,
-        // Ensure status property exists, default to 'pending' if not present
-        status: listingData.status || 'pending'
+        status: listingData.status || "pending",
       } as ListingWithStatus);
     }
-    
+
     return listingsWithUsers;
   } catch (error) {
     console.error("Error fetching all listings:", error);
@@ -269,6 +287,7 @@ export const getAllListingsWithUsers = async (): Promise<ListingWithStatus[]> =>
   }
 };
 
+// Delete listing
 export const deleteListing = async (docId: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, "listings", docId));

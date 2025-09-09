@@ -56,4 +56,5 @@ export interface AdminNotificationData {
   userId?: string; // For specific user notifications
   title: string;
   message: string;
+  listingId?: string;
 }

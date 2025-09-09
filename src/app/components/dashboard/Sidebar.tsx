@@ -97,14 +97,14 @@ export default function Sidebar() {
             <Link
               href="/dashboard/users"
               className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                pathname.startsWith("/dashboard/users")
+                pathname.startsWith("/dashboard/")
                   ? "bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-lg transform scale-[1.02]"
                   : "text-gray-300 hover:bg-gray-800/60 hover:text-white hover:transform hover:scale-[1.01]"
               }`}
             >
               <Users className="w-5 h-5 flex-shrink-0" />
               <span className="font-medium flex-1">Manage Users</span>
-              {pathname.startsWith("/dashboard/users") && (
+              {pathname.startsWith("/dashboard/") && (
                 <ChevronRight className="w-4 h-4 opacity-60" />
               )}
             </Link>

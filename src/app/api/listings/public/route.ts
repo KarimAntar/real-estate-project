@@ -1,6 +1,8 @@
 // src/app/api/listings/public/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
+import { Listing } from "@/types/listing";
+
 
 // GET approved listings for public view (no auth required)
 export async function GET(req: NextRequest) {
@@ -46,28 +48,29 @@ export async function GET(req: NextRequest) {
     const querySnapshot = await query.limit(limit).get();
 
     // Process listings and filter by price/bedrooms if needed
-    let listings = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      docId: doc.id,
-      ...doc.data(),
+    
+    let listings: Listing[] = querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    docId: doc.id,
+    ...(doc.data() as Omit<Listing, "id" | "docId">),
     }));
 
     // Client-side filtering for price range
     if (minPrice) {
-      const min = parseFloat(minPrice);
-      listings = listings.filter(listing => listing.price >= min);
-    }
-    
-    if (maxPrice) {
-      const max = parseFloat(maxPrice);
-      listings = listings.filter(listing => listing.price <= max);
+    const min = parseFloat(minPrice);
+    listings = listings.filter(listing => Number(listing.price) >= min);
     }
 
-    // Client-side filtering for bedrooms
-    if (bedrooms) {
-      const bedroomCount = parseInt(bedrooms);
-      listings = listings.filter(listing => listing.bedrooms >= bedroomCount);
+    if (maxPrice) {
+    const max = parseFloat(maxPrice);
+    listings = listings.filter(listing => Number(listing.price) <= max);
     }
+
+    if (bedrooms) {
+    const bedroomCount = parseInt(bedrooms);
+    listings = listings.filter(listing => Number(listing.bedrooms) >= bedroomCount);
+    }
+
 
     // Get total count for pagination (approximate)
     const totalSnapshot = await db.collection("listings")

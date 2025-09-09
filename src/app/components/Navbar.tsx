@@ -1,10 +1,8 @@
-// src/app/components/Navbar.tsx
 "use client";
 
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../contexts/AuthContext";
-import { getUserProfilePicture } from "../services/profileService";
 import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
 import { 
@@ -24,40 +22,19 @@ import {
   Search
 } from "lucide-react";
 import { signOut } from "firebase/auth";
-import { auth, db } from "@/app/firebase/firebaseConfig";
+import { auth } from "@/app/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  writeBatch,
-  Timestamp,
-} from "firebase/firestore";
 import ProfileImage from "./ProfileImage";
-
-// Define notification type
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  read: boolean;
-  createdAt: Timestamp;
-}
+import NotificationBell from "./NotificationBell"; // Import NotificationBell
 
 export default function Navbar() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [scrolled, setScrolled] = useState(false);
-  
-  const notifRef = useRef<HTMLDivElement>(null);
+
   const userMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -72,32 +49,9 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Fetch notifications in real-time
-  useEffect(() => {
-    if (!user) return;
-
-    const q = query(
-      collection(db, "users", user.uid, "notifications"),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data: Notification[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Notification, "id">),
-      }));
-      setNotifications(data);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
       }
@@ -125,40 +79,14 @@ export default function Navbar() {
     }
   };
 
-  const toggleNotifications = () => {
-    setShowNotifications(!showNotifications);
-    setShowUserMenu(false);
-    setShowMobileMenu(false);
-  };
-
   const toggleUserMenu = () => {
     setShowUserMenu(!showUserMenu);
-    setShowNotifications(false);
     setShowMobileMenu(false);
   };
 
   const toggleMobileMenu = () => {
     setShowMobileMenu(!showMobileMenu);
-    setShowNotifications(false);
     setShowUserMenu(false);
-  };
-
-  const markAsRead = async (notifId: string) => {
-    if (!user) return;
-    const notifRef = doc(db, "users", user.uid, "notifications", notifId);
-    await updateDoc(notifRef, { read: true });
-  };
-
-  const markAllAsRead = async () => {
-    if (!user) return;
-    const batch = writeBatch(db);
-    notifications.forEach((n) => {
-      if (!n.read) {
-        const notifRef = doc(db, "users", user.uid, "notifications", n.id);
-        batch.update(notifRef, { read: true });
-      }
-    });
-    await batch.commit();
   };
 
   // Navigation items
@@ -191,8 +119,6 @@ export default function Navbar() {
       </nav>
     );
   }
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -240,68 +166,7 @@ export default function Navbar() {
             {user ? (
               <>
                 {/* Notifications */}
-                <div className="relative" ref={notifRef}>
-                  <button
-                    onClick={toggleNotifications}
-                    className="relative p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-all duration-200 hover:scale-105"
-                  >
-                    <Bell className="w-5 h-5 text-gray-300" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] w-5 h-5 flex items-center justify-center rounded-full text-white font-medium">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {showNotifications && (
-                    <div className="absolute right-0 top-12 bg-gray-800 border border-gray-700 text-gray-200 rounded-xl shadow-xl w-80 max-h-96 z-50">
-                      <div className="p-4 border-b border-gray-700">
-                        <div className="flex justify-between items-center">
-                          <h3 className="font-semibold">Notifications</h3>
-                          {unreadCount > 0 && (
-                            <button
-                              onClick={markAllAsRead}
-                              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                            >
-                              Mark all read
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="max-h-64 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                          <div className="p-6 text-center text-gray-400">
-                            <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                            <p>No notifications</p>
-                          </div>
-                        ) : (
-                          notifications.map((n) => (
-                            <div
-                              key={n.id}
-                              className={`p-4 border-b border-gray-700 last:border-b-0 cursor-pointer hover:bg-gray-700 transition-colors ${
-                                !n.read ? "bg-gray-750" : ""
-                              }`}
-                              onClick={() => markAsRead(n.id)}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-sm">{n.title}</h4>
-                                  <p className="text-sm text-gray-400 mt-1">{n.message}</p>
-                                  <small className="text-xs text-gray-500 mt-2 block">
-                                    {new Date(n.createdAt.seconds * 1000).toLocaleString()}
-                                  </small>
-                                </div>
-                                {!n.read && (
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 ml-2 mt-1" />
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <NotificationBell />
 
                 {/* Profile Picture */}
                 <ProfileImage 
@@ -391,7 +256,7 @@ export default function Navbar() {
 
                         {user.role === "admin" && (
                           <Link
-                            href="/dashboard/users"
+                            href="/dashboard/"
                             className="flex items-center gap-3 px-4 py-2 hover:bg-gray-700 transition-colors text-purple-400"
                             onClick={() => setShowUserMenu(false)}
                           >
@@ -461,7 +326,7 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {showMobileMenu && (
-          <div 
+          <div
             ref={mobileMenuRef}
             className="md:hidden bg-gray-800 border-t border-gray-700"
           >
@@ -547,7 +412,7 @@ export default function Navbar() {
 
                   {user.role === "admin" && (
                     <Link
-                      href="/dashboard/users"
+                      href="/dashboard/"
                       className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors text-purple-400"
                       onClick={() => setShowMobileMenu(false)}
                     >
@@ -572,7 +437,7 @@ export default function Navbar() {
                     }}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors w-full text-left text-red-400 hover:text-red-300"
                   >
-                    <LogOut className="w-5 h-5" />
+                    <LogOut className="w-4 h-4" />
                     <span>Sign Out</span>
                   </button>
                 </>
