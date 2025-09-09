@@ -6,391 +6,235 @@ import { v4 as uuidv4 } from "uuid";
 import { collection, getDocs, doc, getDoc, query, where, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject, uploadBytesResumable, StorageReference } from "firebase/storage";
 
-// Axios instance
-const api = axios.create({
-  baseURL: "/api",
-});
+// src/services/userService.ts - Updated with notification system
 
-// Add a request interceptor to include the auth token
-api.interceptors.request.use(async (config) => {
-  const user = auth.currentUser;
-  if (user) {
-    const token = await user.getIdToken();
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+import { getAuth } from "firebase/auth";
+import { createNotification } from "@/app/api/notifications/route";
 
+const API_BASE_URL = "/api";
 
-// Helper to handle API errors
-const handleApiError = (error: any, context: string) => {
-  console.error(`${context} Error:`, error);
-  if (error.response) {
-    // The request was made and the server responded with a status code
-    // that falls out of the range of 2xx
-    const errorData = error.response.data;
-    const errorMessage = errorData.error || errorData.message || 'An unknown error occurred';
-    throw new Error(`API Error: ${error.response.status} ${errorMessage}`);
-  } else if (error.request) {
-    // The request was made but no response was received
-    throw new Error('Network Error: Please check your connection');
-  } else {
-    // Something happened in setting up the request that triggered an Error
-    throw new Error(`Error: ${error.message}`);
-  }
-};
-
-
-// ----------------------
-// Auth
-// ----------------------
-export const loginUser = async (email: string, password: string) => {
-  try {
-    const res = await api.post("/auth/login", { email, password });
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Login');
-  }
-};
-
-export const registerUser = async (
-  fullName: string,
-  email: string,
-  password: string
-) => {
-  try {
-    const res = await api.post("/auth/register", { fullName, email, password });
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Register');
-  }
-};
-
-// ----------------------
-// Profile
-// ----------------------
-export const getUserProfile = async () => {
-  try {
-    const res = await api.get("/user/profile");
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Get User Profile');
-  }
-};
-
-export const updateUserProfile = async (data: any) => {
-  try {
-    const res = await api.put("/user/profile", data);
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Update User Profile');
-  }
-};
-
-// ----------------------
-// Listings
-// ----------------------
-
-// Add Listing
-export const addListing = async (listing: Listing): Promise<Listing> => {
-  try {
-    // Generate ID if missing
-    if (!listing.id) listing.id = uuidv4();
-    const res = await api.post("/listings", listing);
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Add Listing');
-    throw error; // Re-throw the error to be caught by the calling function
-  }
-};
-
-// Update Listing
-export const updateListing = async (
-  id: string,
-  data: Partial<Omit<Listing, "userId">>
-) => {
-  try {
-    const payload = {
-      ...data,
-      price: data.price !== undefined ? Number(data.price) : undefined,
-    };
-
-    // PUT to dynamic route /listings/:id
-    const res = await api.put(`/listings/${id}`, payload);
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Update Listing');
-  }
-};
-
-// Delete Listing
-export const deleteListing = async (id: string) => {
-  try {
-    // DELETE to dynamic route /listings/:id
-    const res = await api.delete(`/listings/${id}`);
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Delete Listing');
-  }
-};
-
-// --- NEW FUNCTION: Get a single listing by its document ID ---
-export const getListingById = async (docId: string): Promise<Listing | null> => {
-  const user = auth.currentUser;
+// Get auth token
+const getAuthToken = async () => {
+  const user = getAuth().currentUser;
   if (!user) throw new Error("User not authenticated");
+  return await user.getIdToken();
+};
 
-  const docRef = doc(db, "listings", docId);
-  const docSnap = await getDoc(docRef);
-
-  if (!docSnap.exists()) {
-    console.error("No such listing document!");
-    return null;
-  }
-
-  const listingData = docSnap.data() as Listing;
-
-  // Security check: Ensure the current user owns this listing or is an admin
-  const userDocSnap = await getDoc(doc(db, "users", user.uid));
-  const userRole = userDocSnap.exists() ? userDocSnap.data()?.role : 'user';
-
-  if (listingData.ownerId !== user.uid && userRole !== 'admin') {
-    throw new Error("You do not have permission to edit this listing.");
-  }
-
-  return {
+// Add listing (now creates as pending)
+export const addListing = async (listingData: Listing): Promise<Listing> => {
+  const token = await getAuthToken();
+  
+  // Add status as pending for all new listings
+  const listingWithStatus = {
     ...listingData,
-    docId: docSnap.id,
-    id: listingData.id || docSnap.id, // Ensure both ID properties are present
+    status: "pending" as const,
   };
+
+  const response = await fetch(`${API_BASE_URL}/listings`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(listingWithStatus),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to create listing");
+  }
+
+  const result = await response.json();
+  
+  // Create notification for user about listing being under review
+  await createNotification({
+    userId: listingData.userId,
+    type: "listing_review",
+    title: "Listing Submitted for Review",
+    message: `Your listing "${listingData.title}" has been submitted and is now under review. We'll notify you once it's approved.`,
+    listingId: result.docId || result.id,
+  });
+
+  return result;
 };
-// ----------------------
-// Firebase Storage Image Upload (Client-side)
-// ----------------------
 
-export const uploadImageDirect = async (
-  file: File, 
-  onProgress?: (progress: number) => void
-): Promise<string> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
+// Get listings by user (only approved + user's own pending/declined)
+export const getListingsByUser = async (userId: string): Promise<Listing[]> => {
+  const token = await getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/listings?userId=${userId}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
 
-  // Validate file
-  const maxSize = 5 * 1024 * 1024; // 5MB
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error(`Unsupported file type: ${file.type}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch listings");
   }
 
-  if (file.size > maxSize) {
-    throw new Error(`File size exceeds 5MB limit`);
+  return response.json();
+};
+
+// Get all listings with users (admin only)
+export const getAllListingsWithUsers = async (): Promise<Listing[]> => {
+  const token = await getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/listings?admin=true`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch listings");
   }
 
-  // Generate unique filename
-  const timestamp = Date.now();
-  const fileName = `listings/${user.uid}/${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  return response.json();
+};
 
-  // Create storage reference
-  const storageRef = ref(storage, fileName);
+// Get approved listings for public view
+export const getApprovedListings = async (): Promise<Listing[]> => {
+  const token = await getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/listings/public`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
 
-  try {
-    // Use uploadBytesResumable for progress tracking
-    const uploadTask = uploadBytesResumable(storageRef, file);
+  if (!response.ok) {
+    throw new Error("Failed to fetch approved listings");
+  }
 
-    return new Promise<string>((resolve, reject) => {
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          onProgress?.(Math.round(progress));
-        }, 
-        (error) => {
-          console.error('Upload error:', error);
-          reject(new Error('Failed to upload image'));
-        }, 
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(downloadURL);
-          } catch (error) {
-            reject(new Error('Failed to get download URL'));
-          }
-        }
-      );
+  return response.json();
+};
+
+// Update listing
+export const updateListing = async (listingId: string, updates: Partial<Listing>): Promise<Listing> => {
+  const token = await getAuthToken();
+  
+  // When updating, set status back to pending if content changed
+  const significantFields = ['title', 'description', 'price', 'city', 'type', 'bedrooms', 'bathrooms', 'area'];
+  const hasSignificantChanges = significantFields.some(field => field in updates);
+  
+  const updateData = {
+    ...updates,
+    // Reset to pending if significant changes were made
+    ...(hasSignificantChanges && { status: "pending" }),
+  };
+
+  const response = await fetch(`${API_BASE_URL}/listings/${listingId}`, {
+    method: "PUT",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(updateData),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to update listing");
+  }
+
+  const result = await response.json();
+
+  // If significant changes were made, notify user about re-review
+  if (hasSignificantChanges) {
+    await createNotification({
+      userId: updates.userId || updates.ownerId!,
+      type: "listing_review",
+      title: "Listing Updated - Under Review",
+      message: `Your updated listing "${updates.title || 'listing'}" is now under review again due to significant changes.`,
+      listingId: listingId,
     });
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw new Error('Failed to upload image');
+  }
+
+  return result;
+};
+
+// Delete listing
+export const deleteListing = async (listingId: string): Promise<void> => {
+  const token = await getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/listings/${listingId}`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete listing");
   }
 };
 
-
+// Upload images directly
 export const uploadImagesDirect = async (
   files: File[],
   onProgress?: (fileIndex: number, progress: number) => void
 ): Promise<string[]> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
-
-  if (files.length > 10) {
-    throw new Error("Maximum 10 files allowed per upload");
-  }
-
-  const uploadPromises = files.map((file, index) => 
-    uploadImageDirect(file, (progress) => onProgress?.(index, progress))
-  );
+  const token = await getAuthToken();
   
-  try {
-    const urls = await Promise.all(uploadPromises);
-    return urls;
-  } catch (error) {
-    console.error('Multiple upload error:', error);
-    throw error;
-  }
-};
+  const formData = new FormData();
+  files.forEach(file => {
+    formData.append("images", file);
+  });
 
-// Upload Multiple Images via API (Server-side)
-export const uploadImages = async (files: File[]): Promise<{ urls: string[] }> => {
-  try {
-    const formData = new FormData();
-    files.forEach(file => {
-      formData.append("images", file);
-    });
-
-    const res = await api.post("listings/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return res.data;
-  } catch (error) {
-    handleApiError(error, 'Upload Images');
-    throw error;
-  }
-};
-
-// Delete image from Firebase Storage
-export const deleteImage = async (imageUrl: string) => {
-  const user = auth.currentUser;
-  if (!user) throw new Error("User not authenticated");
-
-  try {
-    // Extract file path from Firebase Storage URL
-    let filePath = '';
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
     
-    if (imageUrl.includes('firebasestorage.googleapis.com')) {
-      // Extract from Firebase Storage URL
-      const urlParts = imageUrl.split('/o/')[1];
-      if (urlParts) {
-        filePath = decodeURIComponent(urlParts.split('?')[0]);
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable && onProgress) {
+        const progress = Math.round((e.loaded / e.total) * 100);
+        // Call progress for all files (simplified)
+        files.forEach((_, index) => onProgress(index, progress));
       }
-    } else if (imageUrl.includes('storage.googleapis.com')) {
-      // Extract from Google Cloud Storage URL
-      const urlParts = imageUrl.split(`storage.googleapis.com/`)[1];
-      if (urlParts) {
-        const pathParts = urlParts.split('/');
-        pathParts.shift(); // Remove bucket name
-        filePath = pathParts.join('/');
+    });
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const response = JSON.parse(xhr.responseText);
+        resolve(response.urls || []);
+      } else {
+        reject(new Error("Failed to upload images"));
       }
-    }
-
-    if (!filePath) {
-      throw new Error('Unable to parse image URL');
-    }
-
-    // Verify the file belongs to the current user
-    if (!filePath.startsWith(`listings/${user.uid}/`)) {
-      throw new Error('Unauthorized to delete this image');
-    }
-
-    // Delete from Firebase Storage
-    const fileRef = ref(storage, filePath);
-    await deleteObject(fileRef);
-
-    console.log('Image deleted successfully:', filePath);
-  } catch (error) {
-    console.error('Failed to delete image:', error);
-    throw error;
-  }
-};
-
-
-// --- UPDATED FUNCTION ---
-// Transform form -> Listing
-export function transformFormToListing(
-  form: ListingFormData,
-  id?: string,
-  imageUrls: string[] = []
-): Listing {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error("User must be authenticated to create a listing.");
-  }
-
-  return {
-    id: id || uuidv4(), // always ensure unique ID
-    userId: currentUser.uid, // ✅ FIX: Add the required userId
-    ownerId: currentUser.uid, // Also keep ownerId for consistency
-    title: form.title,
-    description: form.description,
-    price: Number(form.price),
-    bedrooms: Number(form.bedrooms),
-    bathrooms: Number(form.bathrooms),
-    area: Number(form.area),
-    city: form.city,
-    type: form.type,
-    images: imageUrls,
-  };
-}
-
-// ----------------------
-// Listings Fetch Functions
-// ----------------------
-
-// 🔹 User: get listings by specific userId (Firestore query)
-export const getListingsByUser = async (uid: string): Promise<Listing[]> => {
-  const q = query(collection(db, "listings"), where("userId", "==", uid));
-  const snapshot = await getDocs(q);
-
-  return snapshot.docs.map((docSnap) => {
-    const data = docSnap.data() as Listing;
-    return {
-      docId: docSnap.id,   // Firestore document ID (for edit/delete)
-      ...data,             // internal id, title, etc.
     };
+
+    xhr.onerror = () => reject(new Error("Upload failed"));
+
+    xhr.open("POST", `${API_BASE_URL}/listings/upload`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(formData);
   });
 };
 
-// 🔹 Admin: get all listings with user info
-export async function getAllListingsWithUsers(): Promise<Listing[]> {
-  const listingsSnap = await getDocs(collection(db, "listings"));
-  const listings: Listing[] = [];
+// Delete image
+export const deleteImage = async (imageUrl: string): Promise<void> => {
+  const token = await getAuthToken();
+  
+  const response = await fetch(`${API_BASE_URL}/listings/image`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ imageUrl }),
+  });
 
-  for (const listingDoc of listingsSnap.docs) {
-    const listingData = listingDoc.data() as Listing;
-    let userName = "Unknown User";
-    let userEmail = "";
-
-    if (listingData.ownerId) {
-      const userDoc = await getDoc(doc(db, "users", listingData.ownerId));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        userName = userData?.fullName || "Unnamed";
-        userEmail = userData?.email || "";
-      }
-    }
-
-    listings.push({
-      docId: listingDoc.id, // Firestore document ID
-      ...listingData,
-      userName,
-      userEmail,
-    });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to delete image");
   }
-
-  return listings;
-}
+};
 
 export const getAllUsers = async () => {
   const querySnapshot = await getDocs(collection(db, "users"));

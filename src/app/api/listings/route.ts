@@ -1,7 +1,8 @@
-// src/app/api/listings/route.ts
+// src/app/api/listings/route.ts - Updated with status handling
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
+import { createNotification } from "../notifications/route";
 
 interface Listing {
   id?: string;
@@ -16,6 +17,10 @@ interface Listing {
   images?: string[];
   userId?: string;
   ownerId?: string;
+  status?: "pending" | "approved" | "declined";
+  adminNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   [key: string]: any;
 }
 
@@ -31,7 +36,6 @@ const getUserData = async (uid: string) => {
     }
 };
 
-
 // GET all listings
 export async function GET(req: NextRequest) {
   try {
@@ -46,20 +50,62 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const isAdminQuery = url.searchParams.get("admin") === "true";
+    const isPublicQuery = url.searchParams.get("public") === "true";
+    const userIdQuery = url.searchParams.get("userId");
 
     let querySnapshot;
-    if (isAdmin && isAdminQuery) {
-      querySnapshot = await db.collection("listings").get(); // all listings
+    
+    if (isPublicQuery) {
+      // Public listings - only approved ones
+      querySnapshot = await db.collection("listings")
+        .where("status", "==", "approved")
+        .get();
+    } else if (isAdmin && isAdminQuery) {
+      // Admin view - all listings
+      querySnapshot = await db.collection("listings").get();
+    } else if (userIdQuery && isAdmin) {
+      // Admin viewing specific user's listings
+      querySnapshot = await db.collection("listings")
+        .where("ownerId", "==", userIdQuery)
+        .get();
     } else {
-      // Query for listings where 'ownerId' matches the user's ID
-      querySnapshot = await db.collection("listings").where("ownerId", "==", userId).get();
+      // User's own listings (all statuses)
+      querySnapshot = await db.collection("listings")
+        .where("ownerId", "==", userId)
+        .get();
     }
 
-    const listings = querySnapshot.docs.map(doc => ({ 
-      id: doc.id, 
-      docId: doc.id,
-      ...(doc.data() as Listing) 
-    }));
+    // Get user information for each listing
+    const listings = await Promise.all(
+      querySnapshot.docs.map(async (doc) => {
+        const listingData = doc.data();
+        
+        // Get user information for admin view
+        let userName = "Unknown User";
+        let userEmail = "Unknown Email";
+        
+        if (isAdmin && (isAdminQuery || userIdQuery)) {
+          try {
+            const userDoc = await db.collection("users").doc(listingData.ownerId || listingData.userId).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              userName = userData?.fullName || userData?.email || "Unknown User";
+              userEmail = userData?.email || "Unknown Email";
+            }
+          } catch (error) {
+            console.error("Error fetching user data:", error);
+          }
+        }
+
+        return {
+          id: doc.id,
+          docId: doc.id,
+          ...listingData as Listing,
+          userName: isAdmin ? userName : undefined,
+          userEmail: isAdmin ? userEmail : undefined,
+        };
+      })
+    );
     
     return NextResponse.json(listings);
   } catch (err: unknown) {
@@ -68,7 +114,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
 
 // POST create new listing
 export async function POST(req: NextRequest) {
@@ -94,7 +139,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid price format" }, { status: 400 });
     }
 
-    // Create the listing data
+    // Create the listing data with pending status
     const listingData = {
       title: body.title,
       description: body.description,
@@ -107,6 +152,7 @@ export async function POST(req: NextRequest) {
       images: body.images || [],
       userId: userId, // For backward compatibility
       ownerId: userId, // Primary field for owner identification
+      status: "pending", // All new listings start as pending
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -122,6 +168,15 @@ export async function POST(req: NextRequest) {
 
     await docRef.set(finalListingData);
 
+    // Create notification for the user
+    await createNotification({
+      userId: userId,
+      type: "listing_review",
+      title: "Listing Submitted for Review",
+      message: `Your listing "${body.title}" has been submitted and is now under review. We'll notify you once it's approved.`,
+      listingId: docRef.id,
+    });
+
     console.log("Listing created successfully:", docRef.id);
 
     return NextResponse.json({ 
@@ -129,7 +184,7 @@ export async function POST(req: NextRequest) {
       ...finalListingData 
     });
   } catch (err: unknown) {
-    console.error("POST listings error:", err); // Log the full error object
+    console.error("POST listings error:", err);
 
     const errorDetails = err instanceof Error 
       ? { message: err.message, stack: err.stack } 

@@ -1,7 +1,7 @@
 // src/services/notificationService.ts
 
 import { getAuth } from "firebase/auth";
-import { Notification, NotificationCreateData, AdminNotificationData } from "../../types/notification";
+import { Notification, NotificationCreateData, AdminNotificationData } from "@/types/notification";
 
 const API_BASE_URL = "/api";
 

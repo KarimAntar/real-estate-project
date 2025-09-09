@@ -1,20 +1,22 @@
-// src/app/dashboard/listings/page.tsx
+// src/app/dashboard/listings/page.tsx - Updated with status display
 "use client";
 
 import DashboardLayout from "@components/dashboard/DashboardLayout";
 import ProtectedRoute from "@components/dashboard/ProtectedRoute";
+import ListingStatusBadge from "@/app/components/ListingStatusBadge";
 import { useEffect, useState } from "react";
 import { getListingsByUser, deleteListing, getAllListingsWithUsers } from "@services/userService";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/AuthContext";
-import { Listing } from "@/types/listing";
+import { ListingWithStatus } from "@/types/notification";
 import Image from "next/image";
-import { FaBed, FaBath, FaRulerCombined, FaMapMarkerAlt } from "react-icons/fa";
+import { FaBed, FaBath, FaRulerCombined, FaMapMarkerAlt, FaEye, FaClock, FaCheck, FaTimes } from "react-icons/fa";
 
 export default function ListingsPage() {
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<ListingWithStatus[]>([]);
   const [loadingListings, setLoadingListings] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "declined">("all");
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [mounted, setMounted] = useState(false);
@@ -30,7 +32,7 @@ export default function ListingsPage() {
       const uid = user.uid;
       const role = user.role;
 
-      let data: Listing[] = [];
+      let data: ListingWithStatus[] = [];
       if (role === "admin") {
         data = await getAllListingsWithUsers();
       } else {
@@ -52,7 +54,7 @@ export default function ListingsPage() {
     }
   }, [user, authLoading, mounted]);
 
-  const handleDelete = async (listing: Listing) => {
+  const handleDelete = async (listing: ListingWithStatus) => {
     if (!listing.docId) return toast.error("Missing docId for this listing.");
     if (!confirm("Are you sure you want to delete this listing?")) return;
 
@@ -64,6 +66,19 @@ export default function ListingsPage() {
       console.error(err);
       toast.error("Failed to delete listing.");
     }
+  };
+
+  // Filter listings based on status
+  const filteredListings = statusFilter === "all" 
+    ? listings 
+    : listings.filter(listing => listing.status === statusFilter);
+
+  // Get status counts
+  const statusCounts = {
+    all: listings.length,
+    pending: listings.filter(l => l.status === "pending").length,
+    approved: listings.filter(l => l.status === "approved").length,
+    declined: listings.filter(l => l.status === "declined").length,
   };
 
   if (!mounted || authLoading || loadingListings) {
@@ -84,9 +99,17 @@ export default function ListingsPage() {
       <DashboardLayout>
         <div className="max-w-7xl mx-auto p-6">
           <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold text-white">
-              {user?.role === "admin" ? "All Listings" : "My Listings"}
-            </h2>
+            <div>
+              <h2 className="text-3xl font-bold text-white">
+                {user?.role === "admin" ? "All Listings" : "My Listings"}
+              </h2>
+              <p className="text-gray-400 mt-1">
+                {user?.role === "admin" 
+                  ? "Manage all platform listings" 
+                  : "Manage your property listings"
+                }
+              </p>
+            </div>
             <button
               onClick={() => router.push("/dashboard/listings/add")}
               className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md transition hover:scale-105"
@@ -95,9 +118,53 @@ export default function ListingsPage() {
             </button>
           </div>
 
-          {listings.length === 0 ? (
+          {/* Status Filter Tabs */}
+          <div className="mb-6">
+            <div className="border-b border-gray-700">
+              <nav className="-mb-px flex space-x-8">
+                {[
+                  { key: "all", label: "All", icon: FaEye, count: statusCounts.all },
+                  { key: "pending", label: "Pending", icon: FaClock, count: statusCounts.pending },
+                  { key: "approved", label: "Approved", icon: FaCheck, count: statusCounts.approved },
+                  { key: "declined", label: "Declined", icon: FaTimes, count: statusCounts.declined },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setStatusFilter(tab.key as any)}
+                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        statusFilter === tab.key
+                          ? "border-blue-500 text-blue-400"
+                          : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{tab.label}</span>
+                      {tab.count > 0 && (
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          statusFilter === tab.key
+                            ? "bg-blue-500 text-white"
+                            : "bg-gray-700 text-gray-300"
+                        }`}>
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
+
+          {filteredListings.length === 0 ? (
             <div className="text-center mt-20">
-              <p className="text-gray-300 text-lg">No listings found.</p>
+              <div className="text-gray-400 text-lg mb-4">
+                {statusFilter === "all" 
+                  ? "No listings found." 
+                  : `No ${statusFilter} listings found.`
+                }
+              </div>
               <button
                 onClick={() => router.push("/dashboard/listings/add")}
                 className="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md transition hover:scale-105"
@@ -107,7 +174,7 @@ export default function ListingsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {listings.map((listing) => (
+              {filteredListings.map((listing) => (
                 <div
                   key={listing.id}
                   className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 flex flex-col group"
@@ -125,6 +192,13 @@ export default function ListingsPage() {
                     />
                     <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-lg text-sm font-medium">
                       {listing.type}
+                    </div>
+                    {/* Status Badge */}
+                    <div className="absolute top-3 right-3">
+                      <ListingStatusBadge 
+                        status={listing.status || "pending"} 
+                        className="text-xs"
+                      />
                     </div>
                   </div>
 
@@ -163,15 +237,24 @@ export default function ListingsPage() {
                       </div>
                     </div>
 
+                    {/* Admin note for declined listings */}
+                    {listing.status === "declined" && listing.adminNote && (
+                      <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
+                        <p className="text-sm text-red-300">
+                          <strong>Admin Feedback:</strong> {listing.adminNote}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Admin info */}
                     {user?.role === "admin" && (
-                      <p className="mt-1 text-sm text-blue-400">
+                      <p className="mt-1 text-sm text-blue-400 mb-3">
                         Listed by: {listing.userName} ({listing.userEmail})
                       </p>
                     )}
 
                     {/* Actions */}
-                    <div className="flex space-x-2 mt-4">
+                    <div className="flex space-x-2 mt-auto">
                       <button
                         className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105"
                         onClick={() => router.push(`/dashboard/listings/${listing.id}`)}
