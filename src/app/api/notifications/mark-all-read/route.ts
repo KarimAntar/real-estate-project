@@ -1,32 +1,11 @@
-// src/app/api/notifications/route.ts
+// src/app/api/notifications/mark-all-read/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
-import { Notification, NotificationCreateData } from "@/types/notification";
+import { Timestamp } from "firebase-admin/firestore";
 
-// Helper function to create notification
-export const createNotification = async (data: NotificationCreateData): Promise<string> => {
-  const docRef = db.collection("notifications").doc();
-  
-  const notification: Notification = {
-    id: docRef.id,
-    userId: data.userId,
-    type: data.type,
-    title: data.title,
-    message: data.message,
-    listingId: data.listingId,
-    adminNote: data.adminNote,
-    read: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  await docRef.set(notification);
-  return docRef.id;
-};
-
-// GET - Get user notifications
-export async function GET(req: NextRequest) {
+// POST - Mark all notifications as read
+export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get("authorization")?.split(" ")[1];
     if (!token) {
@@ -36,22 +15,29 @@ export async function GET(req: NextRequest) {
     const decoded = await getAuth().verifyIdToken(token);
     const userId = decoded.uid;
 
+    // Find unread notifications
     const notificationsQuery = await db
       .collection("notifications")
       .where("userId", "==", userId)
-      .orderBy("createdAt", "desc")
+      .where("read", "==", false)
       .get();
 
-    const notifications = notificationsQuery.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Notification[];
+    // Mark them as read
+    const batch = db.batch();
+    notificationsQuery.docs.forEach((doc) => {
+      batch.update(doc.ref, {
+        read: true,
+        updatedAt: Timestamp.now(),
+      });
+    });
 
-    return NextResponse.json(notifications);
+    await batch.commit();
+
+    return NextResponse.json({ message: "All notifications marked as read" });
   } catch (error: any) {
-    console.error("Get notifications error:", error);
+    console.error("Mark all read error:", error?.message || error);
     return NextResponse.json(
-      { error: "Failed to fetch notifications" },
+      { error: "Failed to mark notifications as read", details: error?.message },
       { status: 500 }
     );
   }

@@ -1,25 +1,10 @@
-// src/app/api/admin/notifications/user/route.ts
+// src/app/api/notifications/user/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/app/firebase/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
 import { createNotification } from "@/app/api/notifications/route";
 
-// Helper: Check if user is admin
-const checkAdminAccess = async (token: string) => {
-  const decoded = await getAuth().verifyIdToken(token);
-  const userId = decoded.uid;
-
-  const userDoc = await db.collection("users").doc(userId).get();
-  const userData = userDoc.data();
-
-  if (!userData || userData.role !== "admin") {
-    throw new Error("Admin access required");
-  }
-
-  return { userId, userData };
-};
-
-// POST - Send notification to specific user
+// POST - Send notification to a specific user (non-admin)
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get("authorization")?.split(" ")[1];
@@ -27,8 +12,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await checkAdminAccess(token);
-    const { userId, title, message } = await req.json();
+    const decoded = await getAuth().verifyIdToken(token);
+    const senderId = decoded.uid;
+
+    const { userId, title, message, listingId } = await req.json();
 
     if (!userId || !title || !message) {
       return NextResponse.json(
@@ -37,7 +24,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify target user exists
+    // Security Check: A user can only create a notification for themselves.
+    if (senderId !== userId) {
+        return NextResponse.json({ error: "Forbidden: You can only create notifications for yourself." }, { status: 403 });
+    }
+
+    // Verify the target user exists in the database
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       return NextResponse.json(
@@ -46,22 +38,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create notification
+    // Create the notification using your helper function
     await createNotification({
       userId: userId,
-      type: "admin_message",
+      type: "listing_review", // This type is specific to new listing submissions
       title: title,
       message: message,
+      listingId: listingId,
     });
 
     return NextResponse.json({
-      message: "Notification sent successfully"
+      message: "Notification created successfully"
     });
   } catch (error: any) {
     console.error("User notification error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to send notification" },
-      { status: error.message === "Admin access required" ? 403 : 500 }
+      { status: 500 }
     );
   }
 }

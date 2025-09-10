@@ -9,7 +9,7 @@ import ListingStatusBadge from "@/app/components/ListingStatusBadge";
 import { useAuth } from "@contexts/AuthContext";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "@/app/firebase/firebaseConfig";
-import { getAllListingsWithUsers } from "@services/userService";
+import { getAllListingsWithUsers, deleteListing } from "@services/userService";
 import { ListingWithStatus } from "@/types/notification";
 import { toast } from "react-toastify";
 import Link from "next/link";
@@ -34,8 +34,11 @@ import {
   FaFilter,
   FaSort,
   FaSortUp,
-  FaSortDown
+  FaSortDown,
+  FaBell
 } from "react-icons/fa";
+import ListingApproval from "@/app/components/admin/ListingApproval";
+import NotificationSender from "@/app/components/admin/NotificationSender";
 
 // Enhanced spinner component
 const Spinner = () => (
@@ -64,7 +67,7 @@ interface User {
 
 type SortField = 'fullName' | 'email' | 'role' | 'createdAt';
 type SortOrder = 'asc' | 'desc';
-type ActiveTab = 'overview' | 'users' | 'listings';
+type ActiveTab = 'overview' | 'users' | 'listings' | 'approveListings' | 'sendNotifications';
 
 export default function AdminPanelPage() {
   const { user, loading } = useAuth();
@@ -139,6 +142,25 @@ export default function AdminPanelPage() {
     } catch (err) {
       console.error(err);
       toast.error("Failed to update user");
+    }
+  };
+
+  const handleDelete = async (listing: ListingWithStatus) => {
+    if (!listing.docId) {
+        toast.error("Cannot delete listing: missing document ID.");
+        return;
+    }
+    if (!window.confirm(`Are you sure you want to delete "${listing.title}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        await deleteListing(listing.docId);
+        setListings(prev => prev.filter(l => l.docId !== listing.docId));
+        toast.success("Listing deleted successfully!");
+    } catch (err) {
+        console.error(err);
+        toast.error("Failed to delete listing.");
     }
   };
 
@@ -271,6 +293,8 @@ export default function AdminPanelPage() {
                   { key: "overview", label: "Overview", icon: FaChartBar },
                   { key: "users", label: "User Management", icon: FaUsers },
                   { key: "listings", label: "Listings", icon: FaHome },
+                  { key: "approveListings", label: "Approve Listings", icon: FaCheck },
+                  { key: "sendNotifications", label: "Send Notifications", icon: FaBell },
                 ].map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -908,8 +932,14 @@ export default function AdminPanelPage() {
                             href={`/dashboard/listings/${listing.id}`}
                             className="flex-1 text-center bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105 text-sm"
                           >
-                            View Details
+                            Edit
                           </Link>
+                          <button
+                            onClick={() => handleDelete(listing)}
+                            className="flex-1 text-center bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105 text-sm"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -917,6 +947,16 @@ export default function AdminPanelPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Approve Listings Tab */}
+          {activeTab === 'approveListings' && (
+            <ListingApproval />
+          )}
+
+          {/* Send Notifications Tab */}
+          {activeTab === 'sendNotifications' && (
+            <NotificationSender />
           )}
         </div>
       </DashboardLayout>

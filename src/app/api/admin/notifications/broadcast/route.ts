@@ -8,14 +8,14 @@ import { createNotification } from "@/app/api/notifications/route";
 const checkAdminAccess = async (token: string) => {
   const decoded = await getAuth().verifyIdToken(token);
   const userId = decoded.uid;
-  
+
   const userDoc = await db.collection("users").doc(userId).get();
   const userData = userDoc.data();
-  
+
   if (!userData || userData.role !== "admin") {
     throw new Error("Admin access required");
   }
-  
+
   return { userId, userData };
 };
 
@@ -39,27 +39,23 @@ export async function POST(req: NextRequest) {
 
     // Get all users
     const usersSnapshot = await db.collection("users").get();
-    const batch = db.batch();
 
-    // Create notifications for all users
-    const promises = usersSnapshot.docs.map(async (userDoc) => {
-      const userData = userDoc.data();
-      
-      // Don't send notification to the admin who is sending it
-      if (userData.uid === adminId) return;
-      
-      return createNotification({
-        userId: userData.uid,
-        type: "admin_message",
-        title: title,
-        message: message,
+    // Create notifications for all users, excluding the admin sending the message.
+    const promises = usersSnapshot.docs
+      .filter(doc => doc.id !== adminId) // Filter out the admin
+      .map((userDoc) => {
+        return createNotification({
+          userId: userDoc.id, // Use the document ID as the userId
+          type: "admin_message",
+          title: title,
+          message: message,
+        });
       });
-    });
 
     await Promise.all(promises);
 
-    return NextResponse.json({ 
-      message: `Notification sent to ${usersSnapshot.docs.length - 1} users` 
+    return NextResponse.json({
+      message: `Notification sent to ${promises.length} users`
     });
   } catch (error: any) {
     console.error("Broadcast notification error:", error);

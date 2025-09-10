@@ -18,7 +18,10 @@ import {
   FaChartLine, 
   FaArrowRight,
   FaTimes,
-  FaFilter
+  FaFilter,
+  FaBuilding,
+  FaWarehouse,
+  FaCity
 } from "react-icons/fa";
 
 export default function HomePage() {
@@ -83,6 +86,13 @@ export default function HomePage() {
     { icon: FaUsers, number: "1,200+", label: "Happy Customers", color: "text-green-400" },
     { icon: FaHandshake, number: "50+", label: "Verified Agents", color: "text-purple-400" },
     { icon: FaAward, number: "5", label: "Years Experience", color: "text-yellow-400" },
+  ];
+
+  const categories = [
+    { name: "Home", icon: FaHome },
+    { name: "Villa", icon: FaBuilding },
+    { name: "Apartment", icon: FaCity },
+    { name: "Commercial", icon: FaWarehouse },
   ];
 
   return (
@@ -442,24 +452,24 @@ export default function HomePage() {
               </p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-              {["Home", "Villa", "Apartment", "Commercial"].map((cat) => (
+              {categories.map((cat) => (
                 <button 
-                  key={cat} 
-                  className={`bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 text-center text-xl font-semibold transition-all duration-300 hover:bg-gray-700 hover:shadow-lg hover:shadow-blue-500/50 hover:scale-105 hover:border-blue-500/50 ${category === cat ? "border-blue-400 shadow-lg shadow-blue-500/25 bg-gray-700" : ""} w-full h-full flex flex-col items-center justify-center gap-4 group`}
+                  key={cat.name} 
+                  className={`bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 text-center text-xl font-semibold transition-all duration-300 hover:bg-gray-700 hover:shadow-lg hover:shadow-blue-500/50 hover:scale-105 hover:border-blue-500/50 ${category === cat.name ? "border-blue-400 shadow-lg shadow-blue-500/25 bg-gray-700" : ""} w-full h-full flex flex-col items-center justify-center gap-4 group`}
                   onClick={() => {
-                    setCategory(cat);
+                    setCategory(cat.name);
                     setLocation("");
                     setPropertyType("");
                     setPriceRange("");
                     setBedrooms("");
                     setBathrooms("");
-                    handleSearch("", "", "", cat, "", "");
+                    handleSearch("", "", "", cat.name, "", "");
                   }}
                 >
-                  <div className={`text-4xl ${category === cat ? "text-blue-400" : "text-gray-500"} group-hover:text-blue-400 transition-colors`}>
-                    <FaHome />
+                  <div className={`text-4xl ${category === cat.name ? "text-blue-400" : "text-gray-500"} group-hover:text-blue-400 transition-colors`}>
+                    <cat.icon />
                   </div>
-                  <span className="group-hover:text-blue-400 transition-colors">{cat}</span>
+                  <span className="group-hover:text-blue-400 transition-colors">{cat.name}</span>
                 </button>
               ))}
             </div>

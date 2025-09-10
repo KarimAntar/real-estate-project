@@ -30,15 +30,8 @@ export default function ListingsPage() {
 
     try {
       const uid = user.uid;
-      const role = user.role;
-
-      let data: ListingWithStatus[] = [];
-      if (role === "admin") {
-        data = await getAllListingsWithUsers();
-      } else {
-        data = await getListingsByUser(uid);
-      }
-
+      // ALWAYS fetch listings for the currently logged-in user on this page.
+      const data = await getListingsByUser(uid);
       setListings(data);
     } catch (err) {
       console.error(err);
@@ -47,6 +40,7 @@ export default function ListingsPage() {
       setLoadingListings(false);
     }
   };
+
 
   useEffect(() => {
     if (mounted && !authLoading && user) {
@@ -237,20 +231,27 @@ export default function ListingsPage() {
                       </div>
                     </div>
 
-                    {/* Admin note for declined listings */}
+                    {/* Status Notes */}
+                    {listing.status === "pending" && (
+                      <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
+                        <p className="text-sm text-yellow-300">
+                          Your listing is being reviewed by our team. This usually takes 24-48 hours.
+                        </p>
+                      </div>
+                    )}
+                    {listing.status === "approved" && (
+                      <div className="mb-4 p-3 bg-green-900/20 border border-green-700/50 rounded-lg">
+                        <p className="text-sm text-green-300">
+                          🎉 Your listing is live and visible on the platform!
+                        </p>
+                      </div>
+                    )}
                     {listing.status === "declined" && listing.adminNote && (
                       <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
                         <p className="text-sm text-red-300">
                           <strong>Admin Feedback:</strong> {listing.adminNote}
                         </p>
                       </div>
-                    )}
-
-                    {/* Admin info */}
-                    {user?.role === "admin" && (
-                      <p className="mt-1 text-sm text-blue-400 mb-3">
-                        Listed by: {listing.userName} ({listing.userEmail})
-                      </p>
                     )}
 
                     {/* Actions */}
@@ -273,7 +274,7 @@ export default function ListingsPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>  
       </DashboardLayout>
     </ProtectedRoute>
   );

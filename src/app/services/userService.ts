@@ -296,3 +296,42 @@ export const deleteListing = async (docId: string): Promise<void> => {
     throw new Error("Failed to delete listing");
   }
 };
+
+// Admin: Get pending listings for review
+export const getPendingListings = async (): Promise<ListingWithStatus[]> => {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/admin/listings/pending`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to fetch pending listings");
+  }
+
+  return response.json();
+};
+
+// Admin: Approve or decline a listing
+export const approveListing = async (
+  listingId: string,
+  status: "approved" | "declined",
+  adminNote?: string
+): Promise<void> => {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/admin/listings/approve`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ listingId, status, adminNote }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to process listing approval");
+  }
+};

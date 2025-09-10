@@ -1,4 +1,4 @@
-// src/services/notificationService.ts
+// src/app/services/notificationService.ts
 
 import { getAuth } from "firebase/auth";
 import { Notification, NotificationCreateData, AdminNotificationData } from "@/types/notification";
@@ -101,11 +101,11 @@ export const sendNotificationToAllUsers = async (data: Omit<AdminNotificationDat
   }
 };
 
-// Admin: Send notification to specific user
+// Send notification to specific user
 export const sendNotificationToUser = async (userId: string, data: Omit<AdminNotificationData, "type" | "userId">): Promise<void> => {
   const token = await getAuthToken();
   
-  const response = await fetch(`${API_BASE_URL}/admin/notifications/user`, {
+  const response = await fetch(`${API_BASE_URL}/notifications/user`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -115,9 +115,11 @@ export const sendNotificationToUser = async (userId: string, data: Omit<AdminNot
   });
 
   if (!response.ok) {
-    throw new Error("Failed to send notification to user");
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to send notification to user");
   }
 };
+
 
 // Admin: Get all users for notification targeting
 export const getAllUsers = async () => {

@@ -10,25 +10,32 @@ export const createNotification = async (
   data: NotificationCreateData
 ): Promise<string> => {
   const docRef = db.collection("notifications").doc();
-
   const now = Timestamp.now();
 
-  // ⚡ Store Timestamps in Firestore
-  await docRef.set({
+  // Dynamically build the notification object to avoid undefined fields
+  const notificationData: any = {
     id: docRef.id,
     userId: data.userId,
     type: data.type,
     title: data.title,
     message: data.message,
-    listingId: data.listingId,
-    adminNote: data.adminNote,
     read: false,
     createdAt: now,
     updatedAt: now,
-  });
+  };
+
+  if (data.listingId) {
+    notificationData.listingId = data.listingId;
+  }
+  if (data.adminNote) {
+    notificationData.adminNote = data.adminNote;
+  }
+
+  await docRef.set(notificationData);
 
   return docRef.id;
 };
+
 
 // 🔹 GET - Get user notifications
 export async function GET(req: NextRequest) {

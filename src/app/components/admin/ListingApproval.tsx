@@ -7,6 +7,7 @@ import { FaCheck, FaTimes, FaEye, FaSpinner, FaBed, FaBath, FaRulerCombined, FaM
 import { ListingWithStatus } from "@/types/notification";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
+import { getPendingListings, approveListing } from "../../services/userService";
 
 export default function ListingApproval() {
   const [pendingListings, setPendingListings] = useState<ListingWithStatus[]>([]);
@@ -19,19 +20,7 @@ export default function ListingApproval() {
   // Fetch pending listings
   const fetchPendingListings = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await fetch("/api/admin/listings/pending", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch pending listings");
-      }
-
-      const data = await response.json();
+      const data = await getPendingListings();
       setPendingListings(data);
     } catch (error: any) {
       toast.error(error.message || "Failed to fetch pending listings");
@@ -48,23 +37,7 @@ export default function ListingApproval() {
   const handleApproval = async (listingId: string, status: "approved" | "declined", adminNote?: string) => {
     setProcessingId(listingId);
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await fetch("/api/admin/listings/approve", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          listingId,
-          status,
-          adminNote,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to process listing approval");
-      }
+      await approveListing(listingId, status, adminNote);
 
       // Remove from pending listings
       setPendingListings(prev => prev.filter(listing => listing.docId !== listingId));
