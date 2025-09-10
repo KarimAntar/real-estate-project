@@ -168,110 +168,120 @@ export default function ListingsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredListings.map((listing) => (
-                <div
-                  key={listing.id}
-                  className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 flex flex-col group"
-                >
-                  {/* Image */}
-                  <div className="relative w-full h-56 overflow-hidden">
-                    <Image
-                      src={
-                        listing.images?.[0] ||
-                        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80"
-                      }
-                      alt={listing.title}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-lg text-sm font-medium">
-                      {listing.type}
-                    </div>
-                    {/* Status Badge */}
-                    <div className="absolute top-3 right-3">
-                      <ListingStatusBadge 
-                        status={listing.status || "pending"} 
-                        className="text-xs"
-                      />
-                    </div>
-                  </div>
+{filteredListings.map((listing) => (
+  <div
+    key={listing.id}
+    className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 flex flex-col group"
+  >
+    {/* Image */}
+    <div className="relative w-full h-56 overflow-hidden">
+      <Image
+        src={
+          listing.images?.[0] ||
+          "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80"
+        }
+        alt={listing.title}
+        fill
+        className="object-cover group-hover:scale-110 transition-transform duration-300"
+      />
+      <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-lg text-sm font-medium">
+        {listing.type}
+      </div>
+      {/* Status Badge */}
+      <div className="absolute top-3 right-3">
+        <ListingStatusBadge 
+          status={listing.status || "pending"} 
+          className="text-xs"
+        />
+      </div>
+    </div>
 
-                  {/* Content */}
-                  <div className="p-5 flex flex-col flex-grow">
-                    <h3 className="text-xl font-semibold mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">
-                      {listing.title}
-                    </h3>
+    {/* Content */}
+    <div className="p-5 flex flex-col flex-grow">
+      <h3 className="text-xl font-semibold mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">
+        {listing.title}
+      </h3>
 
-                    <div className="flex items-center text-gray-400 mb-3">
-                      <FaMapMarkerAlt className="text-blue-400 mr-1" />
-                      <span className="text-sm">{listing.city}</span>
-                    </div>
+      <div className="flex items-center text-gray-400 mb-3">
+        <FaMapMarkerAlt className="text-blue-400 mr-1" />
+        <span className="text-sm">{listing.city}</span>
+      </div>
 
-                    <p className="text-gray-300 text-sm mb-4 line-clamp-3 flex-grow">
-                      {listing.description}
-                    </p>
+      <p className="text-gray-300 text-sm mb-4 line-clamp-3">
+        {listing.description}
+      </p>
 
-                    <div className="text-2xl font-bold text-blue-400 mb-4">
-                      ${listing.price}
-                    </div>
+      <div className="text-2xl font-bold text-blue-400 mb-4">
+        ${listing.price}
+      </div>
 
-                    {/* Features */}
-                    <div className="flex justify-between text-sm text-gray-300 bg-gray-700 rounded-lg p-3 mb-4">
-                      <div className="flex items-center gap-1">
-                        <FaBed className="text-blue-400" />
-                        <span>{listing.bedrooms}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <FaBath className="text-blue-400" />
-                        <span>{listing.bathrooms}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <FaRulerCombined className="text-blue-400" />
-                        <span>{listing.area}m²</span>
-                      </div>
-                    </div>
+      {/* Features */}
+      <div className="flex justify-between text-sm text-gray-300 bg-gray-700 rounded-lg p-3 mb-4">
+        <div className="flex items-center gap-1">
+          <FaBed className="text-blue-400" />
+          <span>{listing.bedrooms}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <FaBath className="text-blue-400" />
+          <span>{listing.bathrooms}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <FaRulerCombined className="text-blue-400" />
+          <span>{listing.area}m²</span>
+        </div>
+      </div>
 
-                    {/* Status Notes */}
-                    {listing.status === "pending" && (
-                      <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
-                        <p className="text-sm text-yellow-300">
-                          Your listing is being reviewed by our team. This usually takes 24-48 hours.
-                        </p>
-                      </div>
-                    )}
-                    {listing.status === "approved" && (
-                      <div className="mb-4 p-3 bg-green-900/20 border border-green-700/50 rounded-lg">
-                        <p className="text-sm text-green-300">
-                          🎉 Your listing is live and visible on the platform!
-                        </p>
-                      </div>
-                    )}
-                    {listing.status === "declined" && listing.adminNote && (
-                      <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
-                        <p className="text-sm text-red-300">
-                          <strong>Admin Feedback:</strong> {listing.adminNote}
-                        </p>
-                      </div>
-                    )}
+      {/* Status Notes & Admin Info Container with minimum height */}
+      <div className="flex-grow min-h-[90px]">
+        {/* Status Notes */}
+        {listing.status === "pending" && (
+          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
+            <p className="text-sm text-yellow-300">
+              Your listing is being reviewed by our team. This usually takes 24-48 hours.
+            </p>
+          </div>
+        )}
+        {listing.status === "approved" && (
+          <div className="mb-4 p-3 bg-green-900/20 border border-green-700/50 rounded-lg">
+            <p className="text-sm text-green-300">
+              🎉 Your listing is live and visible on the platform!
+            </p>
+          </div>
+        )}
+        {listing.status === "declined" && listing.adminNote && (
+          <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
+            <p className="text-sm text-red-300">
+              <strong>Admin Feedback:</strong> {listing.adminNote}
+            </p>
+          </div>
+        )}
 
-                    {/* Actions */}
-                    <div className="flex space-x-2 mt-auto">
-                      <button
-                        className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105"
-                        onClick={() => router.push(`/dashboard/listings/${listing.id}`)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105"
-                        onClick={() => handleDelete(listing)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {/* Admin info (only shown to admins) */}
+        {user?.role === "admin" && (
+          <p className="mt-1 text-sm text-blue-400">
+            Listed by: {listing.userName} ({listing.userEmail})
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="flex space-x-2 mt-auto">
+        <button
+          className="flex-1 text-center bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105 text-sm"
+          onClick={() => router.push(`/dashboard/listings/${listing.id}`)}
+        >
+          Edit
+        </button>
+        <button
+          className="flex-1 text-center bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg shadow-md transition hover:scale-105 text-sm"
+          onClick={() => handleDelete(listing)}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+))}
             </div>
           )}
         </div>  

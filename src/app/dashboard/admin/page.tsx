@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import DashboardLayout from "@components/dashboard/DashboardLayout";
 import ProtectedRoute from "@components/dashboard/ProtectedRoute";
 import ProfileImage from "@components/ProfileImage";
@@ -35,7 +36,11 @@ import {
   FaSort,
   FaSortUp,
   FaSortDown,
-  FaBell
+  FaBell,
+  FaMapMarkerAlt,
+  FaBed,
+  FaBath,
+  FaRulerCombined
 } from "react-icons/fa";
 import ListingApproval from "@/app/components/admin/ListingApproval";
 import NotificationSender from "@/app/components/admin/NotificationSender";
@@ -863,70 +868,90 @@ export default function AdminPanelPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredListings.map((listing) => (
-                    <div
-                      key={listing.id}
-                      className="bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-700/50 hover:scale-105 hover:shadow-xl transition-all duration-300 flex flex-col group"
-                    >
-                      {/* Image */}
-                      <div className="relative w-full h-48 overflow-hidden">
-                        <img
-                          src={
-                            listing.images?.[0] ||
-                            "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80"
-                          }
-                          alt={listing.title}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                        />
-                        <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-lg text-sm font-medium">
-                          {listing.type}
-                        </div>
-                        {/* Status Badge */}
-                        <div className="absolute top-3 right-3">
-                          <ListingStatusBadge 
-                            status={listing.status || "pending"} 
-                            className="text-xs"
-                          />
-                        </div>
-                      </div>
+                // (Keep all existing code and replace the `filteredListings.map` section inside the 'listings' tab with the following)
 
-                      {/* Content */}
-                      <div className="p-5 flex flex-col flex-grow">
-                        <h3 className="text-lg font-semibold mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors text-white">
-                          {listing.title}
-                        </h3>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  {filteredListings.map((listing) => (
+    <div
+      key={listing.id}
+      className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 flex flex-col group"
+    >
+      {/* Image */}
+      <div className="relative w-full h-56 overflow-hidden">
+        <Image
+          src={
+            listing.images?.[0] ||
+            "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80"
+          }
+          alt={listing.title}
+          fill
+          className="object-cover group-hover:scale-110 transition-transform duration-300"
+        />
+        <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded-lg text-sm font-medium">
+          {listing.type}
+        </div>
+        {/* Status Badge */}
+        <div className="absolute top-3 right-3">
+          <ListingStatusBadge 
+            status={listing.status || "pending"} 
+            className="text-xs"
+          />
+        </div>
+      </div>
 
-                        <div className="flex items-center text-gray-400 mb-3">
-                          <svg className="w-4 h-4 text-blue-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                          </svg>
-                          <span className="text-sm">{listing.city}</span>
-                        </div>
+      {/* Content */}
+      <div className="p-5 flex flex-col flex-grow">
+        <h3 className="text-xl font-semibold mb-2 line-clamp-2 group-hover:text-blue-400 transition-colors">
+          {listing.title}
+        </h3>
 
-                        <p className="text-gray-300 text-sm mb-4 line-clamp-2 flex-grow">
-                          {listing.description}
-                        </p>
+        <div className="flex items-center text-gray-400 mb-3">
+          <FaMapMarkerAlt className="text-blue-400 mr-1" />
+          <span className="text-sm">{listing.city}</span>
+        </div>
 
-                        <div className="text-xl font-bold text-blue-400 mb-4">
-                          ${listing.price}
-                        </div>
+        <p className="text-gray-300 text-sm mb-4 line-clamp-3">
+          {listing.description}
+        </p>
 
-                        {/* User info */}
-                        <p className="text-sm text-blue-400 mb-3">
-                          Listed by: {listing.userName} ({listing.userEmail})
-                        </p>
+        <div className="text-2xl font-bold text-blue-400 mb-4">
+          ${listing.price}
+        </div>
 
-                        {/* Admin note for declined listings */}
-                        {listing.status === "declined" && listing.adminNote && (
-                          <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
-                            <p className="text-sm text-red-300">
-                              <strong>Admin Feedback:</strong> {listing.adminNote}
-                            </p>
-                          </div>
-                        )}
+        {/* Features */}
+        <div className="flex justify-between text-sm text-gray-300 bg-gray-700 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-1">
+            <FaBed className="text-blue-400" />
+            <span>{listing.bedrooms}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <FaBath className="text-blue-400" />
+            <span>{listing.bathrooms}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <FaRulerCombined className="text-blue-400" />
+            <span>{listing.area}m²</span>
+          </div>
+        </div>
+        
+        {/* User and Feedback Container with minimum height */}
+        <div className="flex-grow min-h-[90px]">
+          {/* User info */}
+          <p className="text-sm text-blue-400 mb-3">
+            Listed by: {listing.userName} ({listing.userEmail})
+          </p>
+        
+          {/* Admin note for declined listings */}
+          {listing.status === "declined" && listing.adminNote && (
+            <div className="mb-4 p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
+              <p className="text-sm text-red-300">
+                <strong>Admin Feedback:</strong> {listing.adminNote}
+              </p>
+            </div>
+          )}
+        </div>
 
-                        {/* Actions */}
+        {/* Actions */}
                         <div className="flex space-x-2 mt-auto">
                           <Link
                             href={`/dashboard/listings/${listing.id}`}
@@ -941,10 +966,10 @@ export default function AdminPanelPage() {
                             Delete
                           </button>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+      </div>
+    </div>
+  ))}
+</div>
               )}
             </div>
           )}
